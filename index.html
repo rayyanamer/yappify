@@ -464,41 +464,27 @@
     jumpLatestBtn.addEventListener("click", () => scrollToBottom(true));
 
     function formatMessageTimestamp(ts) {
-      if (!ts) return "";
-      const date = new Date(ts);
-      const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+      if (ts === null || ts === undefined || ts === "") return "";
 
-      let relative;
-      if (diffSec < 60) {
-        relative = `${diffSec}sec ago`;
-      } else {
-        const diffMin = Math.floor(diffSec / 60);
-        if (diffMin < 60) {
-          relative = `${diffMin}min ago`;
-        } else {
-          const diffHr = Math.floor(diffMin / 60);
-          if (diffHr < 24) {
-            relative = `${diffHr}hr ago`;
-          } else {
-            const diffDay = Math.floor(diffHr / 24);
-            relative = `${diffDay}d ago`;
-          }
-        }
-      }
+      const timestamp = Number(ts);
+      if (!Number.isFinite(timestamp)) return "";
 
-      let hours = date.getHours();
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const ampm = hours >= 12 ? "pm" : "am";
-      hours = hours % 12;
-      if (hours === 0) hours = 12;
-      const clock = `${hours}:${minutes}${ampm}`;
+      const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+      if (diffSec < 1) return "just now";
 
-      const day = String(date.getDate()).padStart(2, "0");
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const year = date.getFullYear();
-      const fullDate = `${day}.${month}.${year}`;
+      const formatUnit = (value, singular, plural) =>
+        `${value} ${value === 1 ? singular : plural} ago`;
 
-      return `${relative} • ${clock} • ${fullDate}`;
+      if (diffSec < 60) return formatUnit(diffSec, "sec", "sec");
+
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return formatUnit(diffMin, "min", "min");
+
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return formatUnit(diffHr, "hr", "hrs");
+
+      const diffDay = Math.floor(diffHr / 24);
+      return formatUnit(diffDay, "day", "days");
     }
 
     function appendTextWithLinks(container, text, isMine) {
@@ -763,7 +749,7 @@
         const time = document.createElement("span");
         time.className = "tabular-nums select-none";
         time.dataset.ts = msg.ts ? String(msg.ts) : "";
-        time.textContent = msg.ts ? new Date(msg.ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "";
+        time.textContent = msg.ts ? formatMessageTimestamp(msg.ts) : "";
         if (isMine) basicMeta.appendChild(sender);
         basicMeta.appendChild(time);
         bubble.appendChild(basicMeta);
@@ -772,7 +758,8 @@
         details.className = "message-details mt-2 pt-2 border-t border-white/[0.06] text-[10px] font-mono";
         addMetaLine(details, "Message ID", msg.id ? String(msg.id) : "Local message");
         addMetaLine(details, "Sender ID", msg.sender ? String(msg.sender) : "Unknown");
-        addMetaLine(details, "Timestamp", msg.ts ? new Date(msg.ts).toISOString() : "Unavailable");
+        addMetaLine(details, "Local time", msg.ts ? new Date(msg.ts).toLocaleString() : "Unavailable");
+        addMetaLine(details, "UTC time", msg.ts ? new Date(msg.ts).toISOString() : "Unavailable");
         addMetaLine(details, "Unix time", msg.ts ? String(msg.ts) : "Unavailable");
         addMetaLine(details, "Payload", `${(msg.text || "").length} text chars${msg.imageUrl ? " · image attached" : ""}${msg.replyTo ? " · reply" : ""}`);
 
@@ -833,7 +820,7 @@
         const ts = Number(el.dataset.ts);
         if (ts) el.textContent = formatMessageTimestamp(ts);
       });
-    }, 10000);
+    }, 1000);
 
     let firebasePush = null;
     let firebaseRef = null;
