@@ -103,14 +103,26 @@
   <!-- Composer -->
   <footer class="bg-surface border-t border-borderSubtle p-3 sm:p-4 shrink-0">
     <form id="message-form" class="max-w-3xl mx-auto flex items-center gap-2">
-      <div class="flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-crimson rounded-2xl px-3.5 py-2 transition flex items-center">
+      <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
+      <button id="attach-btn" type="button" aria-label="Attach image" title="Attach image (max 5 MB)" class="h-10 w-10 rounded-2xl border border-borderSubtle bg-surfaceElevated hover:border-crimson/70 text-slate-300 transition flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-5-5L5 21" />
+        </svg>
+      </button>
+      <div class="min-w-0 flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-crimson rounded-2xl px-3.5 py-2 transition flex flex-col">
+        <div id="image-preview-wrap" class="hidden items-center gap-2 pb-2">
+          <img id="image-preview" alt="Selected image preview" class="h-12 w-12 rounded-lg object-cover border border-borderSubtle" />
+          <span id="image-name" class="min-w-0 flex-1 truncate text-[11px] text-slate-400"></span>
+          <button id="remove-image-btn" type="button" class="text-xs text-rose-300 hover:text-rose-200">Remove</button>
+        </div>
         <textarea
           id="message-input"
           rows="1"
           maxlength="500"
           placeholder="Message..."
           class="w-full bg-transparent text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none max-h-32 leading-relaxed block"
-          required
         ></textarea>
       </div>
       <button
@@ -142,6 +154,8 @@
       messagingSenderId: "218271898790",
       appId: "1:218271898790:web:69afaf4cc811a66abee867",
     };
+
+    const IMGBB_API_KEY = "726fbbd12de1823c568d55f0be750282";
 
     const IS_CONFIGURED =
       FIREBASE_CONFIG.apiKey &&
@@ -183,6 +197,12 @@
     const jumpLatestBtn = document.getElementById("jump-latest-btn");
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
+    const imageInput = document.getElementById("image-input");
+    const attachBtn = document.getElementById("attach-btn");
+    const imagePreviewWrap = document.getElementById("image-preview-wrap");
+    const imagePreview = document.getElementById("image-preview");
+    const imageName = document.getElementById("image-name");
+    const removeImageBtn = document.getElementById("remove-image-btn");
     const onlineCountEl = document.getElementById("online-count");
     const statusDot = document.getElementById("status-dot");
     const toastContainer = document.getElementById("toast-container");
@@ -332,10 +352,29 @@
         bubble.className = isMine
           ? "group relative bg-crimson/95 hover:bg-crimson text-slate-100 rounded-2xl rounded-br-sm px-3.5 py-2 text-sm leading-relaxed break-words shadow-sm cursor-pointer transition-colors"
           : "group relative bg-surfaceElevated/95 hover:bg-surfaceElevated border border-borderSubtle text-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed break-words cursor-pointer transition-colors";
-        bubble.title = "Click to copy";
-        appendTextWithLinks(bubble, msg.text, isMine);
+        bubble.title = msg.text ? "Click to copy text" : "Image message";
+        if (typeof msg.text === "string" && msg.text.length) {
+          const textNode = document.createElement("div");
+          appendTextWithLinks(textNode, msg.text, isMine);
+          bubble.appendChild(textNode);
+        }
 
-        bubble.addEventListener("click", async () => {
+        if (typeof msg.imageUrl === "string" && /^https:\/\//i.test(msg.imageUrl)) {
+          const image = document.createElement("img");
+          image.src = msg.imageUrl;
+          image.alt = "Shared image";
+          image.loading = "lazy";
+          image.referrerPolicy = "no-referrer";
+          image.className = "mt-1 max-w-[50%] max-h-36 rounded-xl object-contain cursor-zoom-in";
+          image.addEventListener("click", (event) => {
+            event.stopPropagation();
+            window.open(msg.imageUrl, "_blank", "noopener,noreferrer");
+          });
+          bubble.appendChild(image);
+        }
+
+        bubble.addEventListener("click", async (event) => {
+          if (event.target instanceof HTMLImageElement || !msg.text) return;
           try {
             await navigator.clipboard.writeText(msg.text);
             showToast("Copied");
@@ -372,21 +411,59 @@
     let firebaseDb = null;
     let firebaseDatabaseApi = null;
     let unsubscribeRoom = null;
+    let unsubscribePresence = null;
     let presenceInterval = null;
-    let presenceRecomputeInterval = null;
-    let latestEntries = [];
 
-    function updateOnlineCountFromEntries(entries) {
-      const now = Date.now();
-      const activeSenders = new Set([clientId]);
-      for (const entry of entries) {
-        if (entry && typeof entry.sender === "string" && typeof entry.ts === "number") {
-          if (now - entry.ts <= PRESENCE_TTL_MS) {
-            activeSenders.add(entry.sender);
-          }
-        }
+    function startViewerPresence() {
+      if (!firebaseDb || !firebaseRef || !firebaseDatabaseApi) return;
+
+      if (presenceInterval) clearInterval(presenceInterval);
+      if (typeof unsubscribePresence === "function") {
+        unsubscribePresence();
+        unsubscribePresence = null;
       }
-      onlineCountEl.textContent = String(activeSenders.size);
+
+      const presenceRef = firebaseRef(firebaseDb, `presence/${ROOM_ID}/${clientId}`);
+      const allPresenceRef = firebaseRef(firebaseDb, `presence/${ROOM_ID}`);
+
+      const updatePresence = () => {
+        firebaseDatabaseApi.set(presenceRef, {
+          lastSeen: Date.now()
+        }).catch((err) => {
+          console.warn("Presence update failed:", err);
+        });
+      };
+
+      firebaseDatabaseApi.onDisconnect(presenceRef).remove()
+        .then(updatePresence)
+        .catch((err) => {
+          console.warn("Presence disconnect handler failed:", err);
+          updatePresence();
+        });
+
+      presenceInterval = setInterval(updatePresence, PRESENCE_HEARTBEAT_MS);
+
+      const presenceHandler = (snapshot) => {
+        const now = Date.now();
+        const entries = snapshot.val() || {};
+        const activeCount = Object.values(entries).filter((entry) => {
+          return entry &&
+            typeof entry.lastSeen === "number" &&
+            now - entry.lastSeen <= PRESENCE_TTL_MS;
+        }).length;
+
+        onlineCountEl.textContent = String(Math.max(1, activeCount));
+      };
+
+      const presenceErrorHandler = (error) => {
+        console.warn("Presence subscription failed:", error);
+        onlineCountEl.textContent = "1";
+      };
+
+      firebaseDatabaseApi.onValue(allPresenceRef, presenceHandler, presenceErrorHandler);
+      unsubscribePresence = () => {
+        firebaseDatabaseApi.off(allPresenceRef, "value", presenceHandler);
+      };
     }
 
     async function initBackend() {
@@ -419,29 +496,6 @@
       }
     }
 
-    function startViewerPresence() {
-      if (!firebaseDb || !firebasePush || !firebaseRef) return;
-
-      if (presenceInterval) clearInterval(presenceInterval);
-      if (presenceRecomputeInterval) clearInterval(presenceRecomputeInterval);
-
-      const pingViewer = () => {
-        // Use the exact validated message schema { sender, text, ts } with a non-empty marker
-        // and filter the marker out of rendered message bubbles.
-        firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), {
-          sender: String(clientId).slice(0, 40),
-          text: "\u200b",
-          ts: Date.now(),
-        }).catch(() => {});
-      };
-
-      pingViewer();
-      presenceInterval = setInterval(pingViewer, PRESENCE_HEARTBEAT_MS);
-      presenceRecomputeInterval = setInterval(() => {
-        updateOnlineCountFromEntries(latestEntries);
-      }, 1000);
-    }
-
     async function subscribeToRoom(room) {
       if (typeof unsubscribeRoom === "function") {
         unsubscribeRoom();
@@ -455,10 +509,7 @@
       }
 
       const rtdb = firebaseDatabaseApi;
-      const roomQuery = rtdb.query(
-        rtdb.ref(firebaseDb, `rooms/${room}`),
-        rtdb.limitToLast(100)
-      );
+      const roomRef = rtdb.ref(firebaseDb, `rooms/${room}`);
 
       const handler = (snapshot) => {
         const val = snapshot.val() || {};
@@ -466,9 +517,6 @@
           .filter(([, data]) => data && typeof data === "object")
           .map(([id, data]) => ({ id, ...data }))
           .sort((a, b) => (a.ts || 0) - (b.ts || 0));
-
-        latestEntries = allEntries;
-        updateOnlineCountFromEntries(allEntries);
 
         const visibleMessages = allEntries.filter(
           (item) => typeof item.text === "string" && item.text.replace(/\u200b/g, "").trim().length > 0
@@ -484,9 +532,52 @@
         showToast(`Firebase read error: ${error.code || error.message}`, true);
       };
 
-      rtdb.onValue(roomQuery, handler, errorHandler);
-      unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
+      rtdb.onValue(roomRef, handler, errorHandler);
+      unsubscribeRoom = () => rtdb.off(roomRef, "value", handler);
     }
+
+    let selectedImage = null;
+    let previewObjectUrl = null;
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+    const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+    function clearSelectedImage() {
+      selectedImage = null;
+      imageInput.value = "";
+      imagePreviewWrap.classList.add("hidden");
+      imagePreviewWrap.classList.remove("flex");
+      imagePreview.removeAttribute("src");
+      imageName.textContent = "";
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+      }
+    }
+
+    attachBtn.addEventListener("click", () => imageInput.click());
+    removeImageBtn.addEventListener("click", clearSelectedImage);
+
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files && imageInput.files[0];
+      if (!file) return;
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+        showToast("Choose a JPG, PNG, WEBP, or GIF image.", true);
+        clearSelectedImage();
+        return;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        showToast("Image must be 5 MB or smaller.", true);
+        clearSelectedImage();
+        return;
+      }
+      selectedImage = file;
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      previewObjectUrl = URL.createObjectURL(file);
+      imagePreview.src = previewObjectUrl;
+      imageName.textContent = file.name;
+      imagePreviewWrap.classList.remove("hidden");
+      imagePreviewWrap.classList.add("flex");
+    });
 
     messageInput.addEventListener("input", () => {
       messageInput.style.height = "auto";
@@ -503,10 +594,11 @@
     messageForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const messageText = messageInput.value.trim();
-      if (!messageText) return;
+      const imageFile = selectedImage;
+      if (!messageText && !imageFile) return;
 
       if (!firebaseDb || !firebasePush || !firebaseRef) {
-        showToast("Firebase is not connected yet.", true);
+        showToast("Firebase is not connected. Check the connection indicator.", true);
         return;
       }
 
@@ -517,26 +609,53 @@
         return;
       }
 
-      const payload = {
-        sender: String(clientId).slice(0, 40),
-        text: messageText.slice(0, 500),
-        ts: now,
-      };
-
       const sendButton = document.getElementById("send-btn");
       sendButton.disabled = true;
+      attachBtn.disabled = true;
 
       try {
+        let imageUrl = null;
+        if (imageFile) {
+          if (!ALLOWED_IMAGE_TYPES.has(imageFile.type) || imageFile.size > MAX_IMAGE_SIZE) {
+            throw new Error("Invalid image. Use JPG, PNG, WEBP, or GIF up to 5 MB.");
+          }
+          if (!IMGBB_API_KEY || IMGBB_API_KEY === "YOUR_IMGBB_API_KEY") {
+            throw new Error("ImgBB is not configured. Add your ImgBB API key in the configuration.");
+          }
+          const uploadData = new FormData();
+          uploadData.append("image", imageFile);
+          uploadData.append("name", imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80));
+          showToast("Uploading image to ImgBB...");
+          const uploadResponse = await fetch(
+            `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}`,
+            { method: "POST", body: uploadData }
+          );
+          const uploadResult = await uploadResponse.json().catch(() => null);
+          if (!uploadResponse.ok || !uploadResult?.success || !uploadResult?.data?.url) {
+            const reason = uploadResult?.error?.message || `ImgBB upload failed (${uploadResponse.status})`;
+            throw new Error(reason);
+          }
+          imageUrl = uploadResult.data.url;
+        }
+
+        const payload = {
+          sender: String(clientId).slice(0, 40),
+          text: messageText.slice(0, 500),
+          ts: Date.now()
+        };
+        if (imageUrl) payload.imageUrl = imageUrl;
+
         await firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), payload);
         lastSentAt = Date.now();
         messageInput.value = "";
         messageInput.style.height = "auto";
+        clearSelectedImage();
       } catch (err) {
-        console.error("Firebase message write failed:", err);
-        const code = err.code || "unknown";
-        showToast(`${code}: ${err.message || "Write failed"}`, true);
+        console.error("Firebase message/image upload failed:", err);
+        showToast(err.code ? `${err.code}: ${err.message}` : (err.message || "Message failed to send."), true);
       } finally {
         sendButton.disabled = false;
+        attachBtn.disabled = false;
       }
     });
 
