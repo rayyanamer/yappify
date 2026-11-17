@@ -123,7 +123,7 @@
       FIREBASE_CONFIG.databaseURL &&
       !FIREBASE_CONFIG.databaseURL.includes("YOUR_PROJECT");
 
-    const ROOM_ID = "main";
+    const ROOM_ID = "public-lobby";
     const PRESENCE_TTL_MS = 25000;
     const PRESENCE_HEARTBEAT_MS = 10000;
     const COOLDOWN_MS = 2000;
@@ -145,7 +145,7 @@
     let localMessages = [
       {
         id: "init-1",
-        cid: "system",
+        sender: "anon",
         text: "Welcome to yappify.",
         ts: Date.now() - 60000,
       },
@@ -196,7 +196,7 @@
       }
 
       messages.forEach((msg) => {
-        const isMine = msg.cid === clientId;
+        const isMine = msg.sender === clientId;
         const row = document.createElement("div");
         row.className = `flex flex-col max-w-xl ${isMine ? "ml-auto items-end" : "items-start"}`;
 
@@ -219,6 +219,8 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
+    let firebasePush = null;
+    let firebaseRef = null;
     let firebaseDb = null;
     let rtdbApi = null;
     let heartbeatTimer = null;
@@ -240,6 +242,8 @@
         const app = initializeApp(FIREBASE_CONFIG);
         rtdbApi = rtdb;
         firebaseDb = rtdb.getDatabase(app);
+        firebaseRef = rtdb.ref;
+        firebasePush = rtdb.push;
 
         subscribeMessages();
         subscribePresence();
@@ -257,7 +261,7 @@
       }
 
       const roomQuery = rtdbApi.query(
-        rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/messages`),
+        rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}`),
         rtdbApi.limitToLast(100)
       );
 
@@ -266,7 +270,7 @@
         (snapshot) => {
           const val = snapshot.val() || {};
           const items = Object.entries(val)
-            .filter(([, data]) => data && typeof data === "object" && typeof data.text === "string")
+            .filter(([key, data]) => key !== "presence" && data && typeof data === "object" && typeof data.text === "string")
             .map(([id, data]) => ({ id, ...data }))
             .sort((a, b) => (a.ts || 0) - (b.ts || 0));
           renderMessages(items);
@@ -341,12 +345,12 @@
       }
 
       const payload = {
-        cid: clientId,
+        sender: String(clientId).slice(0, 40),
         text: text.slice(0, 500),
         ts: now,
       };
 
-      if (!firebaseDb || !rtdbApi) {
+      if (!firebaseDb || !firebasePush || !firebaseRef) {
         localMessages = [...localMessages, { id: `local-${now}`, ...payload }];
         lastSentAt = now;
         messageInput.value = "";
@@ -360,7 +364,7 @@
       sendBtn.disabled = true;
 
       try {
-        await rtdbApi.push(rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/messages`), payload);
+        await firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), payload);
         lastSentAt = Date.now();
         messageInput.value = "";
         messageInput.style.height = "auto";
