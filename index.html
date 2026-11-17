@@ -3,33 +3,33 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PulseRoom — Public Anonymous Group Chat</title>
+  <title>yappify</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+            sans: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
           },
           colors: {
-            canvas: '#0b0d12',
-            surface: '#131720',
-            surfaceElevated: '#1b202c',
-            borderSubtle: '#262d3d',
-            accent: '#6366f1',
-            accentHover: '#4f46e5',
+            canvas: '#131518',
+            surface: '#191c20',
+            surfaceElevated: '#21252b',
+            borderSubtle: '#2c313a',
+            crimson: '#a8383b',
+            crimsonHover: '#8f2e31',
           },
         },
       },
     };
   </script>
   <style>
-    /* Custom scrollbar for smooth chat experience */
     ::-webkit-scrollbar {
       width: 6px;
     }
@@ -37,174 +37,76 @@
       background: transparent;
     }
     ::-webkit-scrollbar-thumb {
-      background: #262d3d;
+      background: #2c313a;
       border-radius: 9999px;
     }
     ::-webkit-scrollbar-thumb:hover {
-      background: #374151;
+      background: #3a414d;
     }
   </style>
 </head>
-<body class="bg-canvas text-slate-100 h-dvh flex flex-col overflow-hidden antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
-  <!-- Top Bar -->
-  <header class="bg-surface/90 backdrop-blur border-b border-borderSubtle px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
-    <div class="flex items-center gap-3 min-w-0">
-      <div class="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold shrink-0">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      </div>
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <h1 class="font-semibold text-sm sm:text-base truncate">PulseRoom</h1>
-          <span id="connection-badge" class="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
-            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-            <span id="connection-text">Local Demo</span>
-          </span>
-        </div>
-        <p class="text-xs text-slate-400 truncate">Public anonymous room • No account required</p>
-      </div>
+<body class="bg-canvas text-slate-200 font-mono h-dvh flex flex-col overflow-hidden antialiased selection:bg-rose-900/35 selection:text-rose-200">
+  <!-- Minimal Top Bar -->
+  <header class="bg-surface/95 backdrop-blur border-b border-borderSubtle px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+    <div class="inline-flex flex-col items-end min-w-0">
+      <h1 class="font-semibold text-base tracking-tight text-slate-200 truncate inline-flex items-baseline leading-none">
+        <span>yapp</span>
+        <span class="relative inline-block">
+          <span>ı</span>
+          <span
+            id="status-dot"
+            class="absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors"
+            title="Connecting"
+          ></span>
+        </span>
+        <span>ffy</span>
+      </h1>
+      <span class="text-[9px] leading-none text-slate-500 mt-1">by Rayyan</span>
     </div>
 
-    <div class="flex items-center gap-2">
-      <!-- Room Switcher -->
-      <label for="room-select" class="sr-only">Select chat room</label>
-      <select
-        id="room-select"
-        class="bg-surfaceElevated border border-borderSubtle text-xs sm:text-sm rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
-      >
-        <option value="public-lobby">#public-lobby</option>
-        <option value="builders">#builders</option>
-        <option value="random">#random</option>
-      </select>
-
-      <!-- Anonymous Handle Pill + Reroll -->
-      <div class="flex items-center gap-1.5 bg-surfaceElevated border border-borderSubtle rounded-xl px-2.5 py-1.5">
-        <span id="user-avatar" class="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shrink-0">A</span>
-        <span id="handle-display" class="text-xs font-medium text-slate-200 max-w-[110px] sm:max-w-[140px] truncate">Ghost_0000</span>
-        <button
-          id="reroll-handle-btn"
-          type="button"
-          title="Generate new anonymous handle"
-          class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition"
-          aria-label="Generate new anonymous handle"
-        >
-          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-        </button>
-      </div>
+    <div class="flex items-center gap-2.5 text-xs text-slate-300 shrink-0">
+      <span class="w-2 h-2 rounded-full bg-rose-400/85"></span>
+      <span id="online-count" class="font-medium tabular-nums">1</span>
     </div>
   </header>
 
-  <!-- Backend Config Banner (Dismissible / Collapsible) -->
-  <div id="backend-banner" class="bg-indigo-950/50 border-b border-indigo-500/25 px-4 py-2 text-xs text-indigo-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
-    <div class="flex items-center gap-2 min-w-0">
-      <span class="font-semibold text-indigo-300 shrink-0">Live Sync:</span>
-      <span id="backend-status-detail" class="truncate text-indigo-100/85">
-Firebase is configured. Messages sync through your Realtime Database when its rules allow access.
-      </span>
-    </div>
-    <button
-      id="toggle-info-modal-btn"
-      type="button"
-      class="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/30 text-indigo-100 font-medium transition shrink-0"
-    >
-      Setup Guide
-    </button>
-  </div>
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full px-4 sm:px-0"></div>
 
-  <!-- Toast / Status Notification Area (replaces alert()) -->
-  <div id="toast-container" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
-
-  <!-- Messages Feed -->
-  <main id="messages-container" class="flex-1 overflow-y-auto px-4 py-5 space-y-3" aria-live="polite">
-    <!-- Messages render here dynamically -->
-  </main>
+  <!-- Single Room Message Stream -->
+  <main id="messages-container" class="flex-1 overflow-y-auto px-4 py-5 space-y-2.5" aria-live="polite"></main>
 
   <!-- Composer -->
   <footer class="bg-surface border-t border-borderSubtle p-3 sm:p-4 shrink-0">
-    <form id="message-form" class="max-w-4xl mx-auto flex items-end gap-2 sm:gap-3">
-      <div class="flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/25 rounded-2xl px-3.5 py-2.5 transition">
+    <form id="message-form" class="max-w-3xl mx-auto flex items-end gap-2">
+      <div class="flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-crimson rounded-2xl px-3.5 py-2.5 transition">
         <textarea
           id="message-input"
           rows="1"
           maxlength="500"
-          placeholder="Write a public anonymous message..."
-          class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none max-h-32 leading-relaxed"
+          placeholder="Message..."
+          class="w-full bg-transparent text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none max-h-32 leading-relaxed"
           required
         ></textarea>
-        <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
-          <span id="cooldown-hint">Press Enter to send • Shift+Enter for newline</span>
-          <span id="char-count">0 / 500</span>
+        <div class="flex items-center justify-end mt-1 text-[11px] text-neutral-500 tabular-nums">
+          <span id="char-count">0/500</span>
         </div>
       </div>
       <button
         id="send-btn"
         type="submit"
-        class="h-11 px-4 sm:px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 transition flex items-center gap-2 shrink-0"
+        aria-label="Send message"
+        class="h-11 w-11 rounded-2xl bg-crimson hover:bg-crimsonHover active:scale-[0.98] text-white transition flex items-center justify-center shrink-0"
       >
-        <span class="hidden sm:inline">Send</span>
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
         </svg>
       </button>
     </form>
   </footer>
 
-  <!-- Setup & Architecture Modal -->
-  <div id="setup-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-    <div class="bg-surface border border-borderSubtle rounded-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto p-5 sm:p-6 shadow-2xl space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-lg font-bold text-white">Free 24/7 Backend Setup</h2>
-        <button id="close-modal-btn" type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-      <p class="text-sm text-slate-300 leading-relaxed">
-PulseRoom uses <strong>Firebase Realtime Database</strong>. To allow this public anonymous chat to work, publish the rules below in Firebase Console → Realtime Database → Rules. These rules allow anyone to read and post validated messages; they are suitable for a small demo, not a heavily abused public service.
-      </p>
-      <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-slate-300">
-        <li>Create a free project at <span class="text-indigo-300 font-medium">console.firebase.google.com</span>.</li>
-        <li>Go to <strong>Build &rarr; Realtime Database</strong> and create a database in the correct region.</li>
-        <li>Configure database security rules. Do not leave unrestricted public write access enabled for a public website; add validation and abuse protection before launch.</li>
-        <li>Your Firebase web app configuration is already included in this page.</li>
-        <li>Publish the exact rules below. A test of the database root <code class="text-indigo-300">/</code> may be denied; test <code class="text-indigo-300">/rooms/public-lobby</code> instead.</li>
-        <li>Host <code class="text-indigo-300">index.html</code> on GitHub Pages, Cloudflare Pages, or Netlify.</li>
-      </ol>
-      <div class="rounded-xl border border-borderSubtle bg-surfaceElevated p-3 space-y-2">
-        <p class="text-xs font-semibold text-indigo-200">Realtime Database Rules</p>
-        <pre class="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">{
-  "rules": {
-    "rooms": {
-      "$room": {
-        ".read": true,
-        "$messageId": {
-          ".write": "!data.exists()",
-          ".validate": "newData.hasChildren(['sender','text','ts']) && newData.child('sender').isString() && newData.child('sender').val().length <= 40 && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('ts').isNumber()"
-        }
-      }
-    }
-  }
-}</pre>
-        <p class="text-[11px] text-amber-200">Public access: anyone can read and post. Add stronger abuse protection before sharing widely.</p>
-      </div>
-      <div class="flex justify-end pt-2">
-        <button id="close-modal-footer-btn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white">
-          Got it
-        </button>
-      </div>
-    </div>
-  </div>
-
   <script type="module">
-    /**
-     * =========================================================================
-     * CONFIGURATION: Connected to your Firebase project (webchat-c0e41).
-     * =========================================================================
-     */
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyBoEp0zehu-V5LMZYDzGgVUYkeciO15RyY",
       authDomain: "webchat-c0e41.firebaseapp.com",
@@ -221,201 +123,111 @@ PulseRoom uses <strong>Firebase Realtime Database</strong>. To allow this public
       FIREBASE_CONFIG.databaseURL &&
       !FIREBASE_CONFIG.databaseURL.includes("YOUR_PROJECT");
 
-    // Palette for deterministic anonymous avatars
-    const AVATAR_COLORS = [
-      "bg-indigo-600",
-      "bg-emerald-600",
-      "bg-rose-600",
-      "bg-amber-600",
-      "bg-cyan-600",
-      "bg-violet-600",
-      "bg-fuchsia-600",
+    const ROOM_ID = "main";
+    const PRESENCE_TTL_MS = 25000;
+    const PRESENCE_HEARTBEAT_MS = 10000;
+    const COOLDOWN_MS = 2000;
+
+    // Anonymous per-tab client id (never shown as a username)
+    const clientId = (() => {
+      try {
+        const existing = sessionStorage.getItem("yappify_cid");
+        if (existing) return existing;
+        const fresh = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem("yappify_cid", fresh);
+        return fresh;
+      } catch {
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    })();
+
+    let lastSentAt = 0;
+    let localMessages = [
+      {
+        id: "init-1",
+        cid: "system",
+        text: "Welcome to yappify.",
+        ts: Date.now() - 60000,
+      },
     ];
 
-    const ADJECTIVES = ["Shadow", "Cosmic", "Quiet", "Neon", "Solar", "Drift", "Cipher", "Echo"];
-    const NOUNS = ["Fox", "Owl", "Comet", "Pulse", "Wave", "Falcon", "Nova", "Orbit"];
-
-    // App State
-    let currentRoom = "public-lobby";
-    let userHandle = getOrCreateHandle();
-    let lastSentAt = 0;
-    const COOLDOWN_MS = 2500;
-
-    // In-memory store used when Firebase config is not yet added
-    const localRoomMessages = {
-      "public-lobby": [
-        {
-          id: "seed-1",
-          sender: "Cosmic_Falcon_42",
-          text: "Welcome to PulseRoom! Open this file in two tabs to test live messages.",
-          ts: Date.now() - 1000 * 60 * 3,
-        },
-        {
-          id: "seed-2",
-          sender: "Neon_Owl_19",
-          text: "No logins, no profiles—just pick a room and talk anonymously.",
-          ts: Date.now() - 1000 * 60 * 1,
-        },
-      ],
-      builders: [],
-      random: [],
-    };
-
-    // DOM References
     const messagesContainer = document.getElementById("messages-container");
     const messageForm = document.getElementById("message-form");
     const messageInput = document.getElementById("message-input");
     const charCount = document.getElementById("char-count");
-    const roomSelect = document.getElementById("room-select");
-    const handleDisplay = document.getElementById("handle-display");
-    const userAvatar = document.getElementById("user-avatar");
-    const rerollBtn = document.getElementById("reroll-handle-btn");
-    const connectionBadge = document.getElementById("connection-badge");
-    const connectionText = document.getElementById("connection-text");
-    const backendStatusDetail = document.getElementById("backend-status-detail");
+    const onlineCountEl = document.getElementById("online-count");
+    const statusDot = document.getElementById("status-dot");
     const toastContainer = document.getElementById("toast-container");
 
-    // Modal controls
-    const setupModal = document.getElementById("setup-modal");
-    document.getElementById("toggle-info-modal-btn").addEventListener("click", () => {
-      setupModal.classList.remove("hidden");
-      setupModal.classList.add("flex");
-    });
-    const closeModal = () => {
-      setupModal.classList.add("hidden");
-      setupModal.classList.remove("flex");
-    };
-    document.getElementById("close-modal-btn").addEventListener("click", closeModal);
-    document.getElementById("close-modal-footer-btn").addEventListener("click", closeModal);
-    setupModal.addEventListener("click", (e) => {
-      if (e.target === setupModal) closeModal();
-    });
-
-    // Lightweight non-blocking toast notification
-    function showToast(message, tone = "info") {
+    function showToast(message, isError = false) {
       const el = document.createElement("div");
-      const styles =
-        tone === "error"
-          ? "bg-rose-950/95 border-rose-500/40 text-rose-100"
-          : "bg-surfaceElevated/95 border-borderSubtle text-slate-100";
-      el.className = `pointer-events-auto border rounded-xl px-3.5 py-2.5 text-xs shadow-xl transition ${styles}`;
+      el.className = isError
+        ? "pointer-events-auto border border-red-500/40 bg-red-950/95 text-red-100 rounded-xl px-3 py-2 text-xs shadow-lg"
+        : "pointer-events-auto border border-borderSubtle bg-surfaceElevated/95 text-neutral-100 rounded-xl px-3 py-2 text-xs shadow-lg";
       el.textContent = message;
       toastContainer.appendChild(el);
       setTimeout(() => {
         el.classList.add("opacity-0");
-        setTimeout(() => el.remove(), 250);
-      }, 3000);
+        setTimeout(() => el.remove(), 200);
+      }, 2500);
     }
 
-    function generateHandle() {
-      const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-      const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-      const num = Math.floor(10 + Math.random() * 90);
-      return `${adj}_${noun}_${num}`;
-    }
-
-    function getOrCreateHandle() {
-      try {
-        const saved = sessionStorage.getItem("pulseroom_handle");
-        if (saved) return saved;
-        const fresh = generateHandle();
-        sessionStorage.setItem("pulseroom_handle", fresh);
-        return fresh;
-      } catch {
-        return generateHandle();
+    function setStatus(state) {
+      if (state === "live") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-emerald-300/85 transition-colors";
+        statusDot.title = "Connected";
+      } else if (state === "error") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-rose-400/90 transition-colors";
+        statusDot.title = "Server down";
+      } else {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors";
+        statusDot.title = "Connecting";
       }
     }
 
-    function getAvatarColor(name) {
-      let hash = 0;
-      for (let i = 0; i < name.length; i++) {
-        hash = name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
-    }
-
-    function updateHandleUI() {
-      handleDisplay.textContent = userHandle;
-      userAvatar.textContent = userHandle.charAt(0).toUpperCase();
-      userAvatar.className = `w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shrink-0 ${getAvatarColor(userHandle)}`;
-    }
-
-    rerollBtn.addEventListener("click", () => {
-      userHandle = generateHandle();
-      try {
-        sessionStorage.setItem("pulseroom_handle", userHandle);
-      } catch {}
-      updateHandleUI();
-      showToast(`Switched handle to ${userHandle}`);
-    });
-
-    // Render a list of messages safely (using textContent to block XSS)
     function renderMessages(messages) {
       messagesContainer.innerHTML = "";
       if (!messages || messages.length === 0) {
         const empty = document.createElement("div");
-        empty.className = "h-full flex flex-col items-center justify-center text-center text-slate-500 py-16";
-        empty.innerHTML = `
-          <p class="text-sm font-medium text-slate-400">No messages in #${currentRoom} yet</p>
-          <p class="text-xs mt-1">Be the first anonymous voice in this room.</p>
-        `;
+        empty.className = "h-full flex items-center justify-center text-xs text-slate-500";
+        empty.textContent = "No messages yet.";
         messagesContainer.appendChild(empty);
         return;
       }
 
       messages.forEach((msg) => {
-        const isMine = msg.sender === userHandle;
+        const isMine = msg.cid === clientId;
         const row = document.createElement("div");
-        row.className = `flex items-start gap-2.5 max-w-2xl ${isMine ? "ml-auto flex-row-reverse" : ""}`;
-
-        const avatar = document.createElement("div");
-        avatar.className = `w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center text-white shrink-0 mt-0.5 ${getAvatarColor(msg.sender || "Anon")}`;
-        avatar.textContent = (msg.sender || "A").charAt(0).toUpperCase();
-
-        const bubbleWrap = document.createElement("div");
-        bubbleWrap.className = `flex flex-col ${isMine ? "items-end" : "items-start"} min-w-0`;
-
-        const meta = document.createElement("div");
-        meta.className = "flex items-center gap-2 text-[11px] text-slate-400 mb-1 px-1";
-
-        const senderEl = document.createElement("span");
-        senderEl.className = "font-medium text-slate-300";
-        senderEl.textContent = isMine ? `${msg.sender} (you)` : msg.sender || "Anonymous";
-
-        const timeEl = document.createElement("span");
-        timeEl.textContent = msg.ts
-          ? new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-          : "";
-
-        meta.append(senderEl, timeEl);
+        row.className = `flex flex-col max-w-xl ${isMine ? "ml-auto items-end" : "items-start"}`;
 
         const bubble = document.createElement("div");
         bubble.className = isMine
-          ? "bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-sm leading-relaxed break-words shadow-sm"
-          : "bg-surfaceElevated border border-borderSubtle text-slate-100 rounded-2xl rounded-tl-sm px-3.5 py-2 text-sm leading-relaxed break-words";
+          ? "bg-crimson text-slate-100 rounded-2xl rounded-br-sm px-3.5 py-2 text-sm leading-relaxed break-words"
+          : "bg-surfaceElevated border border-borderSubtle text-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed break-words";
         bubble.textContent = msg.text;
 
-        bubbleWrap.append(meta, bubble);
-        row.append(avatar, bubbleWrap);
+        const time = document.createElement("span");
+        time.className = "text-[10px] text-slate-500 mt-1 px-1 tabular-nums";
+        time.textContent = msg.ts
+          ? new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        row.append(bubble, time);
         messagesContainer.appendChild(row);
       });
 
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
-    // Backend Adapter (Firebase Realtime DB when configured, Local Demo otherwise)
-    let firebasePush = null;
-    let firebaseRef = null;
     let firebaseDb = null;
-    let firebaseDatabaseApi = null;
-    let unsubscribeRoom = null;
+    let rtdbApi = null;
+    let heartbeatTimer = null;
 
     async function initBackend() {
       if (!IS_CONFIGURED) {
-        connectionBadge.className =
-          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30";
-        connectionText.textContent = "Local Demo";
-        subscribeToRoom(currentRoom);
+        setStatus("live");
+        onlineCountEl.textContent = "1";
+        renderMessages(localMessages);
         return;
       }
 
@@ -426,82 +238,90 @@ PulseRoom uses <strong>Firebase Realtime Database</strong>. To allow this public
         ]);
 
         const app = initializeApp(FIREBASE_CONFIG);
-        firebaseDatabaseApi = rtdb;
+        rtdbApi = rtdb;
         firebaseDb = rtdb.getDatabase(app);
-        firebaseRef = rtdb.ref;
-        firebasePush = rtdb.push;
 
-        connectionText.textContent = "Connecting…";
-        backendStatusDetail.textContent = `Connecting to ${FIREBASE_CONFIG.projectId}…`;
-        await subscribeToRoom(currentRoom);
+        subscribeMessages();
+        subscribePresence();
       } catch (err) {
-        console.error("Firebase initialization failed:", err);
-        connectionText.textContent = "Connection error";
-        backendStatusDetail.textContent = `Firebase initialization failed: ${err.code || err.message || "Unknown error"}`;
-        connectionBadge.className =
-          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30";
-        showToast(`Firebase error: ${err.code || err.message || "Initialization failed"}`, "error");
+        console.error(err);
+        setStatus("error");
+        showToast(err.code || err.message || "Connection failed", true);
       }
     }
 
-    async function subscribeToRoom(room) {
-      if (typeof unsubscribeRoom === "function") {
-        unsubscribeRoom();
-        unsubscribeRoom = null;
-      }
-
-      if (!firebaseDb || !firebaseDatabaseApi) {
-        if (!localRoomMessages[room]) localRoomMessages[room] = [];
-        renderMessages(localRoomMessages[room]);
+    function subscribeMessages() {
+      if (!firebaseDb || !rtdbApi) {
+        renderMessages(localMessages);
         return;
       }
 
-      const rtdb = firebaseDatabaseApi;
-      const roomQuery = rtdb.query(
-        rtdb.ref(firebaseDb, `rooms/${room}`),
-        rtdb.limitToLast(100)
+      const roomQuery = rtdbApi.query(
+        rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/messages`),
+        rtdbApi.limitToLast(100)
       );
 
-      const handler = (snapshot) => {
-        const val = snapshot.val() || {};
-        const items = Object.entries(val)
-          .filter(([, data]) => data && typeof data === "object")
-          .map(([id, data]) => ({ id, ...data }))
-          .sort((a, b) => (a.ts || 0) - (b.ts || 0));
-        renderMessages(items);
-        connectionText.textContent = "Live 24/7";
-        connectionBadge.className =
-          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
-        backendStatusDetail.textContent = `Connected to ${FIREBASE_CONFIG.projectId} • Live sync active in #${room}.`;
-      };
-
-      const errorHandler = (error) => {
-        console.error("Firebase room subscription failed:", error);
-        connectionText.textContent = "Read blocked";
-        connectionBadge.className =
-          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30";
-        backendStatusDetail.textContent = `Database read failed: ${error.code || error.message}. Check rules for /rooms/${room}.`;
-        showToast(`Firebase read error: ${error.code || error.message}`, "error");
-      };
-
-      rtdb.onValue(roomQuery, handler, errorHandler);
-      unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
+      rtdbApi.onValue(
+        roomQuery,
+        (snapshot) => {
+          const val = snapshot.val() || {};
+          const items = Object.entries(val)
+            .filter(([, data]) => data && typeof data === "object" && typeof data.text === "string")
+            .map(([id, data]) => ({ id, ...data }))
+            .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+          renderMessages(items);
+          setStatus("live");
+        },
+        (err) => {
+          console.error(err);
+          setStatus("error");
+          showToast(err.code || err.message || "Read failed", true);
+        }
+      );
     }
 
-    roomSelect.addEventListener("change", (e) => {
-      currentRoom = e.target.value;
-      subscribeToRoom(currentRoom);
-      showToast(`Joined #${currentRoom}`);
-    });
+    function subscribePresence() {
+      if (!firebaseDb || !rtdbApi) return;
 
-    // Auto-resize textarea & update character counter
+      const myPresenceRef = rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/presence/${clientId}`);
+      const allPresenceRef = rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/presence`);
+
+      const ping = () => {
+        rtdbApi.set(myPresenceRef, { ts: Date.now() }).catch(() => {});
+      };
+
+      ping();
+      if (rtdbApi.onDisconnect) {
+        rtdbApi.onDisconnect(myPresenceRef).remove().catch(() => {});
+      }
+
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = setInterval(ping, PRESENCE_HEARTBEAT_MS);
+
+      window.addEventListener("beforeunload", () => {
+        clearInterval(heartbeatTimer);
+        rtdbApi.remove(myPresenceRef).catch(() => {});
+      });
+
+      rtdbApi.onValue(allPresenceRef, (snapshot) => {
+        const val = snapshot.val() || {};
+        const now = Date.now();
+        let count = 0;
+        Object.values(val).forEach((entry) => {
+          if (entry && typeof entry.ts === "number" && now - entry.ts <= PRESENCE_TTL_MS) {
+            count += 1;
+          }
+        });
+        onlineCountEl.textContent = String(Math.max(1, count));
+      });
+    }
+
     messageInput.addEventListener("input", () => {
       messageInput.style.height = "auto";
       messageInput.style.height = `${Math.min(messageInput.scrollHeight, 128)}px`;
-      charCount.textContent = `${messageInput.value.length} / 500`;
+      charCount.textContent = `${messageInput.value.length}/500`;
     });
 
-    // Enter sends message, Shift+Enter adds newline
     messageInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -509,59 +329,50 @@ PulseRoom uses <strong>Firebase Realtime Database</strong>. To allow this public
       }
     });
 
-    // Submit messages to Firebase Realtime Database.
     messageForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const messageText = messageInput.value.trim();
-      if (!messageText) return;
-
-      if (!firebaseDb || !firebasePush || !firebaseRef) {
-        showToast("Firebase is not connected yet. Wait a moment and try again.", "error");
-        return;
-      }
+      const text = messageInput.value.trim();
+      if (!text) return;
 
       const now = Date.now();
       if (now - lastSentAt < COOLDOWN_MS) {
-        const waitSec = ((COOLDOWN_MS - (now - lastSentAt)) / 1000).toFixed(1);
-        showToast(`Slow down a bit — wait ${waitSec}s before sending again.`, "error");
+        showToast("Wait a moment", true);
         return;
       }
 
       const payload = {
-        sender: String(userHandle).slice(0, 40),
-        text: messageText.slice(0, 500),
+        cid: clientId,
+        text: text.slice(0, 500),
         ts: now,
       };
 
-      const sendButton = document.getElementById("send-btn");
-      sendButton.disabled = true;
-      sendButton.classList.add("opacity-60", "cursor-not-allowed");
+      if (!firebaseDb || !rtdbApi) {
+        localMessages = [...localMessages, { id: `local-${now}`, ...payload }];
+        lastSentAt = now;
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        charCount.textContent = "0/500";
+        renderMessages(localMessages);
+        return;
+      }
+
+      const sendBtn = document.getElementById("send-btn");
+      sendBtn.disabled = true;
 
       try {
-        await firebasePush(firebaseRef(firebaseDb, `rooms/${currentRoom}`), payload);
+        await rtdbApi.push(rtdbApi.ref(firebaseDb, `rooms/${ROOM_ID}/messages`), payload);
         lastSentAt = Date.now();
         messageInput.value = "";
         messageInput.style.height = "auto";
-        charCount.textContent = "0 / 500";
+        charCount.textContent = "0/500";
       } catch (err) {
-        console.error("Firebase message write failed:", err);
-        const code = err.code || "unknown";
-        let explanation = err.message || "Unknown Firebase error";
-        if (code === "PERMISSION_DENIED") {
-          explanation = "Permission denied. Publish the Realtime Database rules shown in the Setup Guide.";
-        } else if (code === "NETWORK_ERROR") {
-          explanation = "Network error. Check your internet connection and try again.";
-        }
-        showToast(`${code}: ${explanation}`, "error");
-        backendStatusDetail.textContent = `Message write failed (${code}): ${explanation}`;
+        console.error(err);
+        showToast(err.code || err.message || "Send failed", true);
       } finally {
-        sendButton.disabled = false;
-        sendButton.classList.remove("opacity-60", "cursor-not-allowed");
+        sendBtn.disabled = false;
       }
     });
 
-    // Initialize UI & backend
-    updateHandleUI();
     initBackend();
   </script>
 </body>
