@@ -102,7 +102,7 @@
     <div class="flex items-center gap-2 min-w-0">
       <span class="font-semibold text-indigo-300 shrink-0">Live Sync:</span>
       <span id="backend-status-detail" class="truncate text-indigo-100/85">
-        Running in local preview mode. Paste your free Firebase Realtime Database config in the script block to sync across all visitors 24/7.
+Firebase is configured. Messages sync through your Realtime Database when its rules allow access.
       </span>
     </div>
     <button
@@ -164,14 +164,33 @@
         </button>
       </div>
       <p class="text-sm text-slate-300 leading-relaxed">
-        Static <code class="text-indigo-300">index.html</code> files cannot push messages between browsers on their own. Connect <strong>Firebase Realtime Database</strong> (free Spark plan, 24/7 hosted by Google) by replacing <code class="text-indigo-300">FIREBASE_CONFIG</code> in the script below.
+PulseRoom uses <strong>Firebase Realtime Database</strong>. To allow this public anonymous chat to work, publish the rules below in Firebase Console → Realtime Database → Rules. These rules allow anyone to read and post validated messages; they are suitable for a small demo, not a heavily abused public service.
       </p>
       <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-slate-300">
         <li>Create a free project at <span class="text-indigo-300 font-medium">console.firebase.google.com</span>.</li>
-        <li>Go to <strong>Build &rarr; Realtime Database &rarr; Create Database</strong> (Start in test mode or apply strict validation rules).</li>
-        <li>Copy your Web App <code class="text-indigo-300">firebaseConfig</code> object into <code class="text-indigo-300">index.html</code>.</li>
-        <li>Host <code class="text-indigo-300">index.html</code> free 24/7 on GitHub Pages, Cloudflare Pages, or Netlify.</li>
+        <li>Go to <strong>Build &rarr; Realtime Database</strong> and create a database in the correct region.</li>
+        <li>Configure database security rules. Do not leave unrestricted public write access enabled for a public website; add validation and abuse protection before launch.</li>
+        <li>Your Firebase web app configuration is already included in this page.</li>
+        <li>Publish the exact rules below. A test of the database root <code class="text-indigo-300">/</code> may be denied; test <code class="text-indigo-300">/rooms/public-lobby</code> instead.</li>
+        <li>Host <code class="text-indigo-300">index.html</code> on GitHub Pages, Cloudflare Pages, or Netlify.</li>
       </ol>
+      <div class="rounded-xl border border-borderSubtle bg-surfaceElevated p-3 space-y-2">
+        <p class="text-xs font-semibold text-indigo-200">Realtime Database Rules</p>
+        <pre class="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-slate-300">{
+  "rules": {
+    "rooms": {
+      "$room": {
+        ".read": true,
+        "$messageId": {
+          ".write": "!data.exists()",
+          ".validate": "newData.hasChildren(['sender','text','ts']) && newData.child('sender').isString() && newData.child('sender').val().length <= 40 && newData.child('text').isString() && newData.child('text').val().length > 0 && newData.child('text').val().length <= 500 && newData.child('ts').isNumber()"
+        }
+      }
+    }
+  }
+}</pre>
+        <p class="text-[11px] text-amber-200">Public access: anyone can read and post. Add stronger abuse protection before sharing widely.</p>
+      </div>
       <div class="flex justify-end pt-2">
         <button id="close-modal-footer-btn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white">
           Got it
@@ -388,6 +407,7 @@
     let firebasePush = null;
     let firebaseRef = null;
     let firebaseDb = null;
+    let firebaseDatabaseApi = null;
     let unsubscribeRoom = null;
 
     async function initBackend() {
@@ -401,25 +421,26 @@
 
       try {
         const [{ initializeApp }, rtdb] = await Promise.all([
-          import("https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js"),
-          import("https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"),
         ]);
 
         const app = initializeApp(FIREBASE_CONFIG);
+        firebaseDatabaseApi = rtdb;
         firebaseDb = rtdb.getDatabase(app);
         firebaseRef = rtdb.ref;
         firebasePush = rtdb.push;
 
-        connectionBadge.className =
-          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
-        connectionText.textContent = "Live 24/7";
-        backendStatusDetail.textContent = `Connected to ${FIREBASE_CONFIG.projectId} • Real-time sync active.`;
-
-        subscribeToRoom(currentRoom);
+        connectionText.textContent = "Connecting…";
+        backendStatusDetail.textContent = `Connecting to ${FIREBASE_CONFIG.projectId}…`;
+        await subscribeToRoom(currentRoom);
       } catch (err) {
-        console.error("Failed to initialize Firebase:", err);
-        showToast("Backend connection failed; using local fallback.", "error");
-        subscribeToRoom(currentRoom);
+        console.error("Firebase initialization failed:", err);
+        connectionText.textContent = "Connection error";
+        backendStatusDetail.textContent = `Firebase initialization failed: ${err.code || err.message || "Unknown error"}`;
+        connectionBadge.className =
+          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30";
+        showToast(`Firebase error: ${err.code || err.message || "Initialization failed"}`, "error");
       }
     }
 
@@ -429,23 +450,42 @@
         unsubscribeRoom = null;
       }
 
-      if (IS_CONFIGURED && firebaseDb) {
-        const rtdb = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
-        const roomQuery = rtdb.query(rtdb.ref(firebaseDb, `rooms/${room}`), rtdb.limitToLast(100));
-        const handler = (snapshot) => {
-          const val = snapshot.val() || {};
-          const items = Object.entries(val).map(([id, data]) => ({ id, ...data }));
-          renderMessages(items);
-        };
-        rtdb.onValue(roomQuery, handler, (error) => {
-          console.error(error);
-          showToast("Unable to read messages from room.", "error");
-        });
-        unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
-      } else {
+      if (!firebaseDb || !firebaseDatabaseApi) {
         if (!localRoomMessages[room]) localRoomMessages[room] = [];
         renderMessages(localRoomMessages[room]);
+        return;
       }
+
+      const rtdb = firebaseDatabaseApi;
+      const roomQuery = rtdb.query(
+        rtdb.ref(firebaseDb, `rooms/${room}`),
+        rtdb.limitToLast(100)
+      );
+
+      const handler = (snapshot) => {
+        const val = snapshot.val() || {};
+        const items = Object.entries(val)
+          .filter(([, data]) => data && typeof data === "object")
+          .map(([id, data]) => ({ id, ...data }))
+          .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        renderMessages(items);
+        connectionText.textContent = "Live 24/7";
+        connectionBadge.className =
+          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+        backendStatusDetail.textContent = `Connected to ${FIREBASE_CONFIG.projectId} • Live sync active in #${room}.`;
+      };
+
+      const errorHandler = (error) => {
+        console.error("Firebase room subscription failed:", error);
+        connectionText.textContent = "Read blocked";
+        connectionBadge.className =
+          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30";
+        backendStatusDetail.textContent = `Database read failed: ${error.code || error.message}. Check rules for /rooms/${room}.`;
+        showToast(`Firebase read error: ${error.code || error.message}`, "error");
+      };
+
+      rtdb.onValue(roomQuery, handler, errorHandler);
+      unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
     }
 
     roomSelect.addEventListener("change", (e) => {
@@ -469,11 +509,16 @@
       }
     });
 
-    // Submit message with basic rate-limit protection
+    // Submit messages to Firebase Realtime Database.
     messageForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const text = messageInput.value.trim();
-      if (!text) return;
+      const messageText = messageInput.value.trim();
+      if (!messageText) return;
+
+      if (!firebaseDb || !firebasePush || !firebaseRef) {
+        showToast("Firebase is not connected yet. Wait a moment and try again.", "error");
+        return;
+      }
 
       const now = Date.now();
       if (now - lastSentAt < COOLDOWN_MS) {
@@ -482,27 +527,36 @@
         return;
       }
 
-      lastSentAt = now;
-      messageInput.value = "";
-      messageInput.style.height = "auto";
-      charCount.textContent = "0 / 500";
-
       const payload = {
-        sender: userHandle,
-        text: text.slice(0, 500),
+        sender: String(userHandle).slice(0, 40),
+        text: messageText.slice(0, 500),
         ts: now,
       };
 
-      if (IS_CONFIGURED && firebaseDb) {
-        try {
-          await firebasePush(firebaseRef(firebaseDb, `rooms/${currentRoom}`), payload);
-        } catch (err) {
-          console.error(err);
-          showToast("Failed to send message.", "error");
+      const sendButton = document.getElementById("send-btn");
+      sendButton.disabled = true;
+      sendButton.classList.add("opacity-60", "cursor-not-allowed");
+
+      try {
+        await firebasePush(firebaseRef(firebaseDb, `rooms/${currentRoom}`), payload);
+        lastSentAt = Date.now();
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        charCount.textContent = "0 / 500";
+      } catch (err) {
+        console.error("Firebase message write failed:", err);
+        const code = err.code || "unknown";
+        let explanation = err.message || "Unknown Firebase error";
+        if (code === "PERMISSION_DENIED") {
+          explanation = "Permission denied. Publish the Realtime Database rules shown in the Setup Guide.";
+        } else if (code === "NETWORK_ERROR") {
+          explanation = "Network error. Check your internet connection and try again.";
         }
-      } else {
-        localRoomMessages[currentRoom].push({ id: `local-${now}`, ...payload });
-        renderMessages(localRoomMessages[currentRoom]);
+        showToast(`${code}: ${explanation}`, "error");
+        backendStatusDetail.textContent = `Message write failed (${code}): ${explanation}`;
+      } finally {
+        sendButton.disabled = false;
+        sendButton.classList.remove("opacity-60", "cursor-not-allowed");
       }
     });
 
