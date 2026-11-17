@@ -148,7 +148,3 @@ const PRESENCE_HEARTBEAT_MS = 7000;
 ```
 
 Change `ROOM_ID` if you want the app to use a different room path. All visitors must use the same room ID to see the same chat.
-
-## License
-
-Add a license file if you want to specify how others may use, modify, or distribute this project. Without a license, normal copyright restrictions apply.
