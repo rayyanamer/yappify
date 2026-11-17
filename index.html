@@ -544,7 +544,3 @@
   </script>
 </body>
 </html>
-```
-eof
-
-Restored the original `rooms/public-lobby` path and `{ sender, text, ts }` write payload so Firebase rules pass, filtered zero-width viewer pings out of rendered bubbles so empty bubbles don't appear, and counted active viewers from recent `sender` timestamps.
