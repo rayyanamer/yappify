@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PulseRoom — Public Anonymous Group Chat</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            canvas: '#0b0d12',
+            surface: '#131720',
+            surfaceElevated: '#1b202c',
+            borderSubtle: '#262d3d',
+            accent: '#6366f1',
+            accentHover: '#4f46e5',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    /* Custom scrollbar for smooth chat experience */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #262d3d;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #374151;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-slate-100 h-dvh flex flex-col overflow-hidden antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+  <!-- Top Bar -->
+  <header class="bg-surface/90 backdrop-blur border-b border-borderSubtle px-4 py-3 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div class="flex items-center gap-3 min-w-0">
+      <div class="w-9 h-9 rounded-xl bg-indigo-500/15 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-bold shrink-0">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      </div>
+      <div class="min-w-0">
+        <div class="flex items-center gap-2">
+          <h1 class="font-semibold text-sm sm:text-base truncate">PulseRoom</h1>
+          <span id="connection-badge" class="inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="connection-text">Local Demo</span>
+          </span>
+        </div>
+        <p class="text-xs text-slate-400 truncate">Public anonymous room • No account required</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <!-- Room Switcher -->
+      <label for="room-select" class="sr-only">Select chat room</label>
+      <select
+        id="room-select"
+        class="bg-surfaceElevated border border-borderSubtle text-xs sm:text-sm rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/60"
+      >
+        <option value="public-lobby">#public-lobby</option>
+        <option value="builders">#builders</option>
+        <option value="random">#random</option>
+      </select>
+
+      <!-- Anonymous Handle Pill + Reroll -->
+      <div class="flex items-center gap-1.5 bg-surfaceElevated border border-borderSubtle rounded-xl px-2.5 py-1.5">
+        <span id="user-avatar" class="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shrink-0">A</span>
+        <span id="handle-display" class="text-xs font-medium text-slate-200 max-w-[110px] sm:max-w-[140px] truncate">Ghost_0000</span>
+        <button
+          id="reroll-handle-btn"
+          type="button"
+          title="Generate new anonymous handle"
+          class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition"
+          aria-label="Generate new anonymous handle"
+        >
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Backend Config Banner (Dismissible / Collapsible) -->
+  <div id="backend-banner" class="bg-indigo-950/50 border-b border-indigo-500/25 px-4 py-2 text-xs text-indigo-200 flex flex-wrap items-center justify-between gap-2 shrink-0">
+    <div class="flex items-center gap-2 min-w-0">
+      <span class="font-semibold text-indigo-300 shrink-0">Live Sync:</span>
+      <span id="backend-status-detail" class="truncate text-indigo-100/85">
+        Running in local preview mode. Paste your free Firebase Realtime Database config in the script block to sync across all visitors 24/7.
+      </span>
+    </div>
+    <button
+      id="toggle-info-modal-btn"
+      type="button"
+      class="px-2.5 py-1 rounded-lg bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/30 text-indigo-100 font-medium transition shrink-0"
+    >
+      Setup Guide
+    </button>
+  </div>
+
+  <!-- Toast / Status Notification Area (replaces alert()) -->
+  <div id="toast-container" class="fixed top-20 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-sm w-full px-4 sm:px-0"></div>
+
+  <!-- Messages Feed -->
+  <main id="messages-container" class="flex-1 overflow-y-auto px-4 py-5 space-y-3" aria-live="polite">
+    <!-- Messages render here dynamically -->
+  </main>
+
+  <!-- Composer -->
+  <footer class="bg-surface border-t border-borderSubtle p-3 sm:p-4 shrink-0">
+    <form id="message-form" class="max-w-4xl mx-auto flex items-end gap-2 sm:gap-3">
+      <div class="flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/25 rounded-2xl px-3.5 py-2.5 transition">
+        <textarea
+          id="message-input"
+          rows="1"
+          maxlength="500"
+          placeholder="Write a public anonymous message..."
+          class="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 resize-none focus:outline-none max-h-32 leading-relaxed"
+          required
+        ></textarea>
+        <div class="flex items-center justify-between mt-1 text-[11px] text-slate-500">
+          <span id="cooldown-hint">Press Enter to send • Shift+Enter for newline</span>
+          <span id="char-count">0 / 500</span>
+        </div>
+      </div>
+      <button
+        id="send-btn"
+        type="submit"
+        class="h-11 px-4 sm:px-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 active:scale-[0.98] text-white font-semibold text-sm shadow-lg shadow-indigo-600/25 transition flex items-center gap-2 shrink-0"
+      >
+        <span class="hidden sm:inline">Send</span>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+        </svg>
+      </button>
+    </form>
+  </footer>
+
+  <!-- Setup & Architecture Modal -->
+  <div id="setup-modal" class="fixed inset-0 z-40 hidden items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+    <div class="bg-surface border border-borderSubtle rounded-2xl max-w-xl w-full max-h-[85vh] overflow-y-auto p-5 sm:p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between">
+        <h2 class="text-lg font-bold text-white">Free 24/7 Backend Setup</h2>
+        <button id="close-modal-btn" type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/5">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <p class="text-sm text-slate-300 leading-relaxed">
+        Static <code class="text-indigo-300">index.html</code> files cannot push messages between browsers on their own. Connect <strong>Firebase Realtime Database</strong> (free Spark plan, 24/7 hosted by Google) by replacing <code class="text-indigo-300">FIREBASE_CONFIG</code> in the script below.
+      </p>
+      <ol class="list-decimal list-inside space-y-2 text-xs sm:text-sm text-slate-300">
+        <li>Create a free project at <span class="text-indigo-300 font-medium">console.firebase.google.com</span>.</li>
+        <li>Go to <strong>Build &rarr; Realtime Database &rarr; Create Database</strong> (Start in test mode or apply strict validation rules).</li>
+        <li>Copy your Web App <code class="text-indigo-300">firebaseConfig</code> object into <code class="text-indigo-300">index.html</code>.</li>
+        <li>Host <code class="text-indigo-300">index.html</code> free 24/7 on GitHub Pages, Cloudflare Pages, or Netlify.</li>
+      </ol>
+      <div class="flex justify-end pt-2">
+        <button id="close-modal-footer-btn" type="button" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-sm font-semibold text-white">
+          Got it
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    /**
+     * =========================================================================
+     * CONFIGURATION: Connected to your Firebase project (webchat-c0e41).
+     * =========================================================================
+     */
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBoEp0zehu-V5LMZYDzGgVUYkeciO15RyY",
+      authDomain: "webchat-c0e41.firebaseapp.com",
+      databaseURL: "https://webchat-c0e41-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "webchat-c0e41",
+      storageBucket: "webchat-c0e41.firebasestorage.app",
+      messagingSenderId: "218271898790",
+      appId: "1:218271898790:web:69afaf4cc811a66abee867",
+    };
+
+    const IS_CONFIGURED =
+      FIREBASE_CONFIG.apiKey &&
+      FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" &&
+      FIREBASE_CONFIG.databaseURL &&
+      !FIREBASE_CONFIG.databaseURL.includes("YOUR_PROJECT");
+
+    // Palette for deterministic anonymous avatars
+    const AVATAR_COLORS = [
+      "bg-indigo-600",
+      "bg-emerald-600",
+      "bg-rose-600",
+      "bg-amber-600",
+      "bg-cyan-600",
+      "bg-violet-600",
+      "bg-fuchsia-600",
+    ];
+
+    const ADJECTIVES = ["Shadow", "Cosmic", "Quiet", "Neon", "Solar", "Drift", "Cipher", "Echo"];
+    const NOUNS = ["Fox", "Owl", "Comet", "Pulse", "Wave", "Falcon", "Nova", "Orbit"];
+
+    // App State
+    let currentRoom = "public-lobby";
+    let userHandle = getOrCreateHandle();
+    let lastSentAt = 0;
+    const COOLDOWN_MS = 2500;
+
+    // In-memory store used when Firebase config is not yet added
+    const localRoomMessages = {
+      "public-lobby": [
+        {
+          id: "seed-1",
+          sender: "Cosmic_Falcon_42",
+          text: "Welcome to PulseRoom! Open this file in two tabs to test live messages.",
+          ts: Date.now() - 1000 * 60 * 3,
+        },
+        {
+          id: "seed-2",
+          sender: "Neon_Owl_19",
+          text: "No logins, no profiles—just pick a room and talk anonymously.",
+          ts: Date.now() - 1000 * 60 * 1,
+        },
+      ],
+      builders: [],
+      random: [],
+    };
+
+    // DOM References
+    const messagesContainer = document.getElementById("messages-container");
+    const messageForm = document.getElementById("message-form");
+    const messageInput = document.getElementById("message-input");
+    const charCount = document.getElementById("char-count");
+    const roomSelect = document.getElementById("room-select");
+    const handleDisplay = document.getElementById("handle-display");
+    const userAvatar = document.getElementById("user-avatar");
+    const rerollBtn = document.getElementById("reroll-handle-btn");
+    const connectionBadge = document.getElementById("connection-badge");
+    const connectionText = document.getElementById("connection-text");
+    const backendStatusDetail = document.getElementById("backend-status-detail");
+    const toastContainer = document.getElementById("toast-container");
+
+    // Modal controls
+    const setupModal = document.getElementById("setup-modal");
+    document.getElementById("toggle-info-modal-btn").addEventListener("click", () => {
+      setupModal.classList.remove("hidden");
+      setupModal.classList.add("flex");
+    });
+    const closeModal = () => {
+      setupModal.classList.add("hidden");
+      setupModal.classList.remove("flex");
+    };
+    document.getElementById("close-modal-btn").addEventListener("click", closeModal);
+    document.getElementById("close-modal-footer-btn").addEventListener("click", closeModal);
+    setupModal.addEventListener("click", (e) => {
+      if (e.target === setupModal) closeModal();
+    });
+
+    // Lightweight non-blocking toast notification
+    function showToast(message, tone = "info") {
+      const el = document.createElement("div");
+      const styles =
+        tone === "error"
+          ? "bg-rose-950/95 border-rose-500/40 text-rose-100"
+          : "bg-surfaceElevated/95 border-borderSubtle text-slate-100";
+      el.className = `pointer-events-auto border rounded-xl px-3.5 py-2.5 text-xs shadow-xl transition ${styles}`;
+      el.textContent = message;
+      toastContainer.appendChild(el);
+      setTimeout(() => {
+        el.classList.add("opacity-0");
+        setTimeout(() => el.remove(), 250);
+      }, 3000);
+    }
+
+    function generateHandle() {
+      const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+      const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+      const num = Math.floor(10 + Math.random() * 90);
+      return `${adj}_${noun}_${num}`;
+    }
+
+    function getOrCreateHandle() {
+      try {
+        const saved = sessionStorage.getItem("pulseroom_handle");
+        if (saved) return saved;
+        const fresh = generateHandle();
+        sessionStorage.setItem("pulseroom_handle", fresh);
+        return fresh;
+      } catch {
+        return generateHandle();
+      }
+    }
+
+    function getAvatarColor(name) {
+      let hash = 0;
+      for (let i = 0; i < name.length; i++) {
+        hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+    }
+
+    function updateHandleUI() {
+      handleDisplay.textContent = userHandle;
+      userAvatar.textContent = userHandle.charAt(0).toUpperCase();
+      userAvatar.className = `w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center text-white shrink-0 ${getAvatarColor(userHandle)}`;
+    }
+
+    rerollBtn.addEventListener("click", () => {
+      userHandle = generateHandle();
+      try {
+        sessionStorage.setItem("pulseroom_handle", userHandle);
+      } catch {}
+      updateHandleUI();
+      showToast(`Switched handle to ${userHandle}`);
+    });
+
+    // Render a list of messages safely (using textContent to block XSS)
+    function renderMessages(messages) {
+      messagesContainer.innerHTML = "";
+      if (!messages || messages.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "h-full flex flex-col items-center justify-center text-center text-slate-500 py-16";
+        empty.innerHTML = `
+          <p class="text-sm font-medium text-slate-400">No messages in #${currentRoom} yet</p>
+          <p class="text-xs mt-1">Be the first anonymous voice in this room.</p>
+        `;
+        messagesContainer.appendChild(empty);
+        return;
+      }
+
+      messages.forEach((msg) => {
+        const isMine = msg.sender === userHandle;
+        const row = document.createElement("div");
+        row.className = `flex items-start gap-2.5 max-w-2xl ${isMine ? "ml-auto flex-row-reverse" : ""}`;
+
+        const avatar = document.createElement("div");
+        avatar.className = `w-8 h-8 rounded-full text-xs font-bold flex items-center justify-center text-white shrink-0 mt-0.5 ${getAvatarColor(msg.sender || "Anon")}`;
+        avatar.textContent = (msg.sender || "A").charAt(0).toUpperCase();
+
+        const bubbleWrap = document.createElement("div");
+        bubbleWrap.className = `flex flex-col ${isMine ? "items-end" : "items-start"} min-w-0`;
+
+        const meta = document.createElement("div");
+        meta.className = "flex items-center gap-2 text-[11px] text-slate-400 mb-1 px-1";
+
+        const senderEl = document.createElement("span");
+        senderEl.className = "font-medium text-slate-300";
+        senderEl.textContent = isMine ? `${msg.sender} (you)` : msg.sender || "Anonymous";
+
+        const timeEl = document.createElement("span");
+        timeEl.textContent = msg.ts
+          ? new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          : "";
+
+        meta.append(senderEl, timeEl);
+
+        const bubble = document.createElement("div");
+        bubble.className = isMine
+          ? "bg-indigo-600 text-white rounded-2xl rounded-tr-sm px-3.5 py-2 text-sm leading-relaxed break-words shadow-sm"
+          : "bg-surfaceElevated border border-borderSubtle text-slate-100 rounded-2xl rounded-tl-sm px-3.5 py-2 text-sm leading-relaxed break-words";
+        bubble.textContent = msg.text;
+
+        bubbleWrap.append(meta, bubble);
+        row.append(avatar, bubbleWrap);
+        messagesContainer.appendChild(row);
+      });
+
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    // Backend Adapter (Firebase Realtime DB when configured, Local Demo otherwise)
+    let firebasePush = null;
+    let firebaseRef = null;
+    let firebaseDb = null;
+    let unsubscribeRoom = null;
+
+    async function initBackend() {
+      if (!IS_CONFIGURED) {
+        connectionBadge.className =
+          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30";
+        connectionText.textContent = "Local Demo";
+        subscribeToRoom(currentRoom);
+        return;
+      }
+
+      try {
+        const [{ initializeApp }, rtdb] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js"),
+        ]);
+
+        const app = initializeApp(FIREBASE_CONFIG);
+        firebaseDb = rtdb.getDatabase(app);
+        firebaseRef = rtdb.ref;
+        firebasePush = rtdb.push;
+
+        connectionBadge.className =
+          "inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30";
+        connectionText.textContent = "Live 24/7";
+        backendStatusDetail.textContent = `Connected to ${FIREBASE_CONFIG.projectId} • Real-time sync active.`;
+
+        subscribeToRoom(currentRoom);
+      } catch (err) {
+        console.error("Failed to initialize Firebase:", err);
+        showToast("Backend connection failed; using local fallback.", "error");
+        subscribeToRoom(currentRoom);
+      }
+    }
+
+    async function subscribeToRoom(room) {
+      if (typeof unsubscribeRoom === "function") {
+        unsubscribeRoom();
+        unsubscribeRoom = null;
+      }
+
+      if (IS_CONFIGURED && firebaseDb) {
+        const rtdb = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js");
+        const roomQuery = rtdb.query(rtdb.ref(firebaseDb, `rooms/${room}`), rtdb.limitToLast(100));
+        const handler = (snapshot) => {
+          const val = snapshot.val() || {};
+          const items = Object.entries(val).map(([id, data]) => ({ id, ...data }));
+          renderMessages(items);
+        };
+        rtdb.onValue(roomQuery, handler, (error) => {
+          console.error(error);
+          showToast("Unable to read messages from room.", "error");
+        });
+        unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
+      } else {
+        if (!localRoomMessages[room]) localRoomMessages[room] = [];
+        renderMessages(localRoomMessages[room]);
+      }
+    }
+
+    roomSelect.addEventListener("change", (e) => {
+      currentRoom = e.target.value;
+      subscribeToRoom(currentRoom);
+      showToast(`Joined #${currentRoom}`);
+    });
+
+    // Auto-resize textarea & update character counter
+    messageInput.addEventListener("input", () => {
+      messageInput.style.height = "auto";
+      messageInput.style.height = `${Math.min(messageInput.scrollHeight, 128)}px`;
+      charCount.textContent = `${messageInput.value.length} / 500`;
+    });
+
+    // Enter sends message, Shift+Enter adds newline
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        messageForm.requestSubmit();
+      }
+    });
+
+    // Submit message with basic rate-limit protection
+    messageForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = messageInput.value.trim();
+      if (!text) return;
+
+      const now = Date.now();
+      if (now - lastSentAt < COOLDOWN_MS) {
+        const waitSec = ((COOLDOWN_MS - (now - lastSentAt)) / 1000).toFixed(1);
+        showToast(`Slow down a bit — wait ${waitSec}s before sending again.`, "error");
+        return;
+      }
+
+      lastSentAt = now;
+      messageInput.value = "";
+      messageInput.style.height = "auto";
+      charCount.textContent = "0 / 500";
+
+      const payload = {
+        sender: userHandle,
+        text: text.slice(0, 500),
+        ts: now,
+      };
+
+      if (IS_CONFIGURED && firebaseDb) {
+        try {
+          await firebasePush(firebaseRef(firebaseDb, `rooms/${currentRoom}`), payload);
+        } catch (err) {
+          console.error(err);
+          showToast("Failed to send message.", "error");
+        }
+      } else {
+        localRoomMessages[currentRoom].push({ id: `local-${now}`, ...payload });
+        renderMessages(localRoomMessages[currentRoom]);
+      }
+    });
+
+    // Initialize UI & backend
+    updateHandleUI();
+    initBackend();
+  </script>
+</body>
+</html>
