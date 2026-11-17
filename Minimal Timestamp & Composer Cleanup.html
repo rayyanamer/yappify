@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>yappify</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+            sans: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            canvas: '#131518',
+            surface: '#191c20',
+            surfaceElevated: '#21252b',
+            borderSubtle: '#2c313a',
+            crimson: '#a8383b',
+            crimsonHover: '#8f2e31',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2c313a;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a414d;
+    }
+
+    @keyframes bubbleIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .msg-enter {
+      animation: bubbleIn 140ms ease-out both;
+    }
+  </style>
+</head>
+<body class="bg-canvas text-slate-200 font-mono h-dvh flex flex-col overflow-hidden antialiased selection:bg-rose-900/35 selection:text-rose-200">
+  <!-- Minimal Top Bar -->
+  <header class="bg-surface/95 backdrop-blur border-b border-borderSubtle px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+    <div class="inline-flex flex-col items-end min-w-0">
+      <h1 class="font-semibold text-base tracking-tight text-slate-200 truncate inline-flex items-baseline leading-none">
+        <span>yapp</span>
+        <span class="relative inline-block">
+          <span>ı</span>
+          <span
+            id="status-dot"
+            class="absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors"
+            title="Connecting"
+          ></span>
+        </span>
+        <span>ffy</span>
+      </h1>
+      <span class="text-[9px] leading-none text-slate-500 mt-1">by Rayyan</span>
+    </div>
+
+    <div class="flex items-center gap-2.5 text-xs text-slate-300 shrink-0">
+      <span class="w-2 h-2 rounded-full bg-rose-400/85"></span>
+      <span id="online-count" class="font-medium tabular-nums">1</span>
+    </div>
+  </header>
+
+  <!-- Toast Notifications -->
+  <div id="toast-container" class="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none max-w-xs w-full px-4 sm:px-0"></div>
+
+  <!-- Single Room Message Stream -->
+  <div class="relative flex-1 min-h-0 flex flex-col">
+    <main id="messages-container" class="flex-1 overflow-y-auto px-4 py-5 space-y-3" aria-live="polite"></main>
+    <button
+      id="jump-latest-btn"
+      type="button"
+      class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-surfaceElevated/95 border border-borderSubtle text-[11px] text-slate-200 hover:border-crimson/70 shadow-lg transition"
+    >
+      ↓ Latest
+    </button>
+  </div>
+
+  <!-- Composer -->
+  <footer class="bg-surface border-t border-borderSubtle p-3 sm:p-4 shrink-0">
+    <form id="message-form" class="max-w-3xl mx-auto flex items-center gap-2">
+      <div class="flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-crimson rounded-2xl px-3.5 py-2 transition flex items-center">
+        <textarea
+          id="message-input"
+          rows="1"
+          maxlength="500"
+          placeholder="Message..."
+          class="w-full bg-transparent text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none max-h-32 leading-relaxed block"
+          required
+        ></textarea>
+      </div>
+      <button
+        id="send-btn"
+        type="submit"
+        aria-label="Send message"
+        class="h-10 w-10 rounded-2xl bg-crimson hover:bg-crimsonHover active:scale-[0.98] text-white transition flex items-center justify-center shrink-0"
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </svg>
+      </button>
+    </form>
+  </footer>
+
+  <script type="module">
+    /**
+     * =========================================================================
+     * CONFIGURATION: Connected to your Firebase project (webchat-c0e41).
+     * =========================================================================
+     */
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBoEp0zehu-V5LMZYDzGgVUYkeciO15RyY",
+      authDomain: "webchat-c0e41.firebaseapp.com",
+      databaseURL: "https://webchat-c0e41-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "webchat-c0e41",
+      storageBucket: "webchat-c0e41.firebasestorage.app",
+      messagingSenderId: "218271898790",
+      appId: "1:218271898790:web:69afaf4cc811a66abee867",
+    };
+
+    const IS_CONFIGURED =
+      FIREBASE_CONFIG.apiKey &&
+      FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" &&
+      FIREBASE_CONFIG.databaseURL &&
+      !FIREBASE_CONFIG.databaseURL.includes("YOUR_PROJECT");
+
+    const ROOM_ID = "public-lobby";
+    const COOLDOWN_MS = 2500;
+    const PRESENCE_TTL_MS = 20000;
+    const PRESENCE_HEARTBEAT_MS = 7000;
+
+    // Anonymous per-tab sender id (never shown as a username)
+    const clientId = (() => {
+      try {
+        const existing = sessionStorage.getItem("yappify_cid");
+        if (existing) return existing;
+        const fresh = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem("yappify_cid", fresh);
+        return fresh;
+      } catch {
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    })();
+
+    let lastSentAt = 0;
+    const localRoomMessages = {
+      "public-lobby": [
+        {
+          id: "seed-1",
+          sender: "anon",
+          text: "Welcome to yappify.",
+          ts: Date.now() - 1000 * 60 * 3,
+        },
+      ],
+    };
+
+    const messagesContainer = document.getElementById("messages-container");
+    const jumpLatestBtn = document.getElementById("jump-latest-btn");
+    const messageForm = document.getElementById("message-form");
+    const messageInput = document.getElementById("message-input");
+    const onlineCountEl = document.getElementById("online-count");
+    const statusDot = document.getElementById("status-dot");
+    const toastContainer = document.getElementById("toast-container");
+    const renderedMessageIds = new Set();
+
+    function isNearBottom() {
+      const threshold = 96;
+      return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
+    }
+
+    function scrollToBottom(smooth = false) {
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+      jumpLatestBtn.classList.add("hidden");
+    }
+
+    messagesContainer.addEventListener("scroll", () => {
+      if (isNearBottom()) {
+        jumpLatestBtn.classList.add("hidden");
+      }
+    });
+
+    jumpLatestBtn.addEventListener("click", () => scrollToBottom(true));
+
+    function formatMessageTimestamp(ts) {
+      if (!ts) return "";
+      const date = new Date(ts);
+      const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+
+      let relative;
+      if (diffSec < 60) {
+        relative = `${diffSec}sec ago`;
+      } else {
+        const diffMin = Math.floor(diffSec / 60);
+        if (diffMin < 60) {
+          relative = `${diffMin}min ago`;
+        } else {
+          const diffHr = Math.floor(diffMin / 60);
+          if (diffHr < 24) {
+            relative = `${diffHr}hr ago`;
+          } else {
+            const diffDay = Math.floor(diffHr / 24);
+            relative = `${diffDay}d ago`;
+          }
+        }
+      }
+
+      let hours = date.getHours();
+      const minutes = String(date.getMinutes()).padStart(2, "0");
+      const ampm = hours >= 12 ? "pm" : "am";
+      hours = hours % 12;
+      if (hours === 0) hours = 12;
+      const clock = `${hours}:${minutes}${ampm}`;
+
+      const day = String(date.getDate()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const year = date.getFullYear();
+      const fullDate = `${day}.${month}.${year}`;
+
+      return `${relative} • ${clock} • ${fullDate}`;
+    }
+
+    function appendTextWithLinks(container, text, isMine) {
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      let lastIndex = 0;
+      for (const match of text.matchAll(urlRegex)) {
+        const start = match.index ?? 0;
+        if (start > lastIndex) {
+          container.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+        }
+        const url = match[0];
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer nofollow";
+        link.textContent = url;
+        link.className = isMine
+          ? "underline underline-offset-2 decoration-rose-200/70 hover:text-white break-all"
+          : "underline underline-offset-2 decoration-rose-400/60 text-rose-300 hover:text-rose-200 break-all";
+        link.addEventListener("click", (e) => e.stopPropagation());
+        container.appendChild(link);
+        lastIndex = start + url.length;
+      }
+      if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+    }
+
+    function showToast(message, isError = false) {
+      const el = document.createElement("div");
+      el.className = isError
+        ? "pointer-events-auto border border-red-500/40 bg-red-950/95 text-red-100 rounded-xl px-3 py-2 text-xs shadow-lg"
+        : "pointer-events-auto border border-borderSubtle bg-surfaceElevated/95 text-neutral-100 rounded-xl px-3 py-2 text-xs shadow-lg";
+      el.textContent = message;
+      toastContainer.appendChild(el);
+      setTimeout(() => {
+        el.classList.add("opacity-0");
+        setTimeout(() => el.remove(), 200);
+      }, 2500);
+    }
+
+    function setStatus(state) {
+      if (state === "live") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-emerald-300/85 transition-colors";
+        statusDot.title = "Connected";
+      } else if (state === "error") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-rose-400/90 transition-colors";
+        statusDot.title = "Server down";
+      } else {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors";
+        statusDot.title = "Connecting";
+      }
+    }
+
+    function renderMessages(messages) {
+      const shouldStick = isNearBottom();
+      messagesContainer.innerHTML = "";
+
+      if (!messages || messages.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "h-full flex items-center justify-center text-xs text-slate-500";
+        empty.textContent = "No messages yet.";
+        messagesContainer.appendChild(empty);
+        jumpLatestBtn.classList.add("hidden");
+        return;
+      }
+
+      messages.forEach((msg, idx) => {
+        const isMine = msg.sender === clientId;
+        const prev = messages[idx - 1];
+        const groupedWithPrev =
+          prev &&
+          prev.sender === msg.sender &&
+          typeof msg.ts === "number" &&
+          typeof prev.ts === "number" &&
+          msg.ts - prev.ts < 90000;
+
+        const row = document.createElement("div");
+        row.className = `flex flex-col max-w-xl ${isMine ? "ml-auto items-end" : "items-start"} ${
+          groupedWithPrev ? "-mt-1.5" : ""
+        } ${!renderedMessageIds.has(msg.id) ? "msg-enter" : ""}`;
+        if (msg.id) renderedMessageIds.add(msg.id);
+
+        const bubble = document.createElement("div");
+        bubble.className = isMine
+          ? "group relative bg-crimson/95 hover:bg-crimson text-slate-100 rounded-2xl rounded-br-sm px-3.5 py-2 text-sm leading-relaxed break-words shadow-sm cursor-pointer transition-colors"
+          : "group relative bg-surfaceElevated/95 hover:bg-surfaceElevated border border-borderSubtle text-slate-200 rounded-2xl rounded-bl-sm px-3.5 py-2 text-sm leading-relaxed break-words cursor-pointer transition-colors";
+        bubble.title = "Click to copy";
+        appendTextWithLinks(bubble, msg.text, isMine);
+
+        bubble.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(msg.text);
+            showToast("Copied");
+          } catch {
+            showToast("Copy failed", true);
+          }
+        });
+
+        const time = document.createElement("span");
+        time.className = "text-[10px] text-slate-500/75 mt-1 px-1 tabular-nums select-none tracking-tight";
+        time.dataset.ts = msg.ts ? String(msg.ts) : "";
+        time.textContent = formatMessageTimestamp(msg.ts);
+
+        row.append(bubble, time);
+        messagesContainer.appendChild(row);
+      });
+
+      if (shouldStick || (messages[messages.length - 1] && messages[messages.length - 1].sender === clientId)) {
+        scrollToBottom(false);
+      } else {
+        jumpLatestBtn.classList.remove("hidden");
+      }
+    }
+
+    setInterval(() => {
+      document.querySelectorAll("[data-ts]").forEach((el) => {
+        const ts = Number(el.dataset.ts);
+        if (ts) el.textContent = formatMessageTimestamp(ts);
+      });
+    }, 10000);
+
+    let firebasePush = null;
+    let firebaseRef = null;
+    let firebaseDb = null;
+    let firebaseDatabaseApi = null;
+    let unsubscribeRoom = null;
+    let presenceInterval = null;
+    let presenceRecomputeInterval = null;
+    let latestEntries = [];
+
+    function updateOnlineCountFromEntries(entries) {
+      const now = Date.now();
+      const activeSenders = new Set([clientId]);
+      for (const entry of entries) {
+        if (entry && typeof entry.sender === "string" && typeof entry.ts === "number") {
+          if (now - entry.ts <= PRESENCE_TTL_MS) {
+            activeSenders.add(entry.sender);
+          }
+        }
+      }
+      onlineCountEl.textContent = String(activeSenders.size);
+    }
+
+    async function initBackend() {
+      if (!IS_CONFIGURED) {
+        setStatus("live");
+        onlineCountEl.textContent = "1";
+        renderMessages(localRoomMessages[ROOM_ID]);
+        return;
+      }
+
+      try {
+        const [{ initializeApp }, rtdb] = await Promise.all([
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
+          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"),
+        ]);
+
+        const app = initializeApp(FIREBASE_CONFIG);
+        firebaseDatabaseApi = rtdb;
+        firebaseDb = rtdb.getDatabase(app);
+        firebaseRef = rtdb.ref;
+        firebasePush = rtdb.push;
+
+        setStatus("connecting");
+        await subscribeToRoom(ROOM_ID);
+        startViewerPresence();
+      } catch (err) {
+        console.error("Firebase initialization failed:", err);
+        setStatus("error");
+        showToast(`Firebase error: ${err.code || err.message || "Initialization failed"}`, true);
+      }
+    }
+
+    function startViewerPresence() {
+      if (!firebaseDb || !firebasePush || !firebaseRef) return;
+
+      if (presenceInterval) clearInterval(presenceInterval);
+      if (presenceRecomputeInterval) clearInterval(presenceRecomputeInterval);
+
+      const pingViewer = () => {
+        // Use the exact validated message schema { sender, text, ts } with a non-empty marker
+        // and filter the marker out of rendered message bubbles.
+        firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), {
+          sender: String(clientId).slice(0, 40),
+          text: "\u200b",
+          ts: Date.now(),
+        }).catch(() => {});
+      };
+
+      pingViewer();
+      presenceInterval = setInterval(pingViewer, PRESENCE_HEARTBEAT_MS);
+      presenceRecomputeInterval = setInterval(() => {
+        updateOnlineCountFromEntries(latestEntries);
+      }, 1000);
+    }
+
+    async function subscribeToRoom(room) {
+      if (typeof unsubscribeRoom === "function") {
+        unsubscribeRoom();
+        unsubscribeRoom = null;
+      }
+
+      if (!firebaseDb || !firebaseDatabaseApi) {
+        if (!localRoomMessages[room]) localRoomMessages[room] = [];
+        renderMessages(localRoomMessages[room]);
+        return;
+      }
+
+      const rtdb = firebaseDatabaseApi;
+      const roomQuery = rtdb.query(
+        rtdb.ref(firebaseDb, `rooms/${room}`),
+        rtdb.limitToLast(100)
+      );
+
+      const handler = (snapshot) => {
+        const val = snapshot.val() || {};
+        const allEntries = Object.entries(val)
+          .filter(([, data]) => data && typeof data === "object")
+          .map(([id, data]) => ({ id, ...data }))
+          .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+
+        latestEntries = allEntries;
+        updateOnlineCountFromEntries(allEntries);
+
+        const visibleMessages = allEntries.filter(
+          (item) => typeof item.text === "string" && item.text.replace(/\u200b/g, "").trim().length > 0
+        );
+
+        renderMessages(visibleMessages);
+        setStatus("live");
+      };
+
+      const errorHandler = (error) => {
+        console.error("Firebase room subscription failed:", error);
+        setStatus("error");
+        showToast(`Firebase read error: ${error.code || error.message}`, true);
+      };
+
+      rtdb.onValue(roomQuery, handler, errorHandler);
+      unsubscribeRoom = () => rtdb.off(roomQuery, "value", handler);
+    }
+
+    messageInput.addEventListener("input", () => {
+      messageInput.style.height = "auto";
+      messageInput.style.height = `${Math.min(messageInput.scrollHeight, 128)}px`;
+    });
+
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        messageForm.requestSubmit();
+      }
+    });
+
+    messageForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const messageText = messageInput.value.trim();
+      if (!messageText) return;
+
+      if (!firebaseDb || !firebasePush || !firebaseRef) {
+        showToast("Firebase is not connected yet.", true);
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastSentAt < COOLDOWN_MS) {
+        const waitSec = ((COOLDOWN_MS - (now - lastSentAt)) / 1000).toFixed(1);
+        showToast(`Wait ${waitSec}s`, true);
+        return;
+      }
+
+      const payload = {
+        sender: String(clientId).slice(0, 40),
+        text: messageText.slice(0, 500),
+        ts: now,
+      };
+
+      const sendButton = document.getElementById("send-btn");
+      sendButton.disabled = true;
+
+      try {
+        await firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), payload);
+        lastSentAt = Date.now();
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+      } catch (err) {
+        console.error("Firebase message write failed:", err);
+        const code = err.code || "unknown";
+        showToast(`${code}: ${err.message || "Write failed"}`, true);
+      } finally {
+        sendButton.disabled = false;
+      }
+    });
+
+    initBackend();
+  </script>
+</body>
+</html>
+```
+eof
+
+Restored the original `rooms/public-lobby` path and `{ sender, text, ts }` write payload so Firebase rules pass, filtered zero-width viewer pings out of rendered bubbles so empty bubbles don't appear, and counted active viewers from recent `sender` timestamps.
