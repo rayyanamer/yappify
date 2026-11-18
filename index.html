@@ -132,9 +132,10 @@
       color:#e2e8f0;
       font-family:var(--mono);
       -webkit-font-smoothing:antialiased;
-      transition:background-image .3s ease
+      transition:background-image .3s ease;
+      -webkit-tap-highlight-color: transparent; /* Fixes the blue box on click */
     }
-    button,textarea{font:inherit}
+    button,textarea{font:inherit; -webkit-tap-highlight-color: transparent;}
     button{color:inherit;cursor:pointer}
     button:disabled{opacity:.55;cursor:not-allowed}
     a{color:inherit}
@@ -202,15 +203,39 @@
     .date-divider::before,.date-divider::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(170,180,194,.12),transparent)}
     .date-divider span{color:rgba(148,163,184,.65);font-variant-numeric:tabular-nums}
 
-    .message-bubble{position:relative;max-width:100%;padding:9px 14px;border:1px solid rgba(255,255,255,.035);border-radius:18px;line-height:1.6;font-size:13px;overflow-wrap:anywhere;box-shadow:0 4px 14px rgba(0,0,0,.09);transition:transform .13s,background .15s,border-color .15s;cursor:pointer}
+    .message-bubble{position:relative;max-width:100%;padding:9px 14px;border:1px solid rgba(255,255,255,.035);border-radius:18px;line-height:1.6;font-size:13px;overflow-wrap:anywhere;box-shadow:0 4px 14px rgba(0,0,0,.09);transition:transform .18s cubic-bezier(.22,1,.36,1),background .18s,border-color .18s,box-shadow .2s;cursor:pointer}
     .mine .message-bubble{background:var(--mine-bg);border-color:rgba(255,255,255,.045);color:#f1f5f9;border-bottom-right-radius:4px}
     .mine .message-bubble:hover{background:var(--mine-hover)}
     .other .message-bubble{background:rgba(33,37,43,.9);color:#e2e8f0;border-bottom-left-radius:4px}
     .other .message-bubble:hover{background:#21252b}
-    .message-row.expanded .message-bubble{border-color:var(--soft-border);box-shadow:0 8px 24px rgba(0,0,0,.16)}
+    
+    /* Smooth Animation for Chat Bubble Extension */
     .basic-meta{display:flex;align-items:center;gap:10px;margin-top:6px;color:rgba(119,128,141,.9);font-size:11px}
-    .message-details{display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.06);font-size:11px}
-    .expanded .message-details{display:block}.expanded .basic-meta{display:none}
+    .message-details{
+      display:grid;
+      grid-template-rows: 0fr;
+      opacity: 0;
+      overflow: hidden;
+      transition: grid-template-rows .3s cubic-bezier(.22,1,.36,1), opacity .25s ease, margin-top .3s ease, padding-top .3s ease;
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 1px solid transparent;
+      font-size: 11px;
+    }
+    .message-details-inner {
+      overflow: hidden;
+      min-height: 0;
+    }
+    .expanded .message-bubble{border-color:var(--soft-border);box-shadow:0 8px 24px rgba(0,0,0,.16);transform:translateY(-1px)}
+    .expanded .message-details{
+      grid-template-rows: 1fr;
+      opacity: 1;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255,255,255,.06);
+    }
+    .expanded .basic-meta{display:none}
+
     .meta-line{display:flex;justify-content:space-between;gap:16px;padding:3px 0}
     .meta-key{color:#77808d}.meta-value{color:#aeb5bf;text-align:right;overflow-wrap:anywhere;user-select:text}
     .actions{display:flex;justify-content:flex-end;gap:16px;margin-top:10px;padding-top:6px;border-top:1px solid rgba(255,255,255,.06);color:#77808d;font-size:11px}
@@ -751,12 +776,16 @@
 
       const details = document.createElement("div");
       details.className = "message-details";
-      metaLine(details, "Message ID", message.id);
-      metaLine(details, "Sender ID", message.sender);
-      metaLine(details, "Local time", message.ts ? new Date(message.ts).toLocaleString() : "Unavailable");
-      metaLine(details, "UTC time", message.ts ? new Date(message.ts).toISOString() : "Unavailable");
-      metaLine(details, "Unix time", message.ts ? String(message.ts) : "Unavailable");
-      metaLine(details, "Payload", `${(message.text || "").length} text chars${message.imageUrl ? " · image attached" : ""}${message.replyTo ? " · reply" : ""}`);
+      
+      const detailsInner = document.createElement("div");
+      detailsInner.className = "message-details-inner";
+
+      metaLine(detailsInner, "Message ID", message.id);
+      metaLine(detailsInner, "Sender ID", message.sender);
+      metaLine(detailsInner, "Local time", message.ts ? new Date(message.ts).toLocaleString() : "Unavailable");
+      metaLine(detailsInner, "UTC time", message.ts ? new Date(message.ts).toISOString() : "Unavailable");
+      metaLine(detailsInner, "Unix time", message.ts ? String(message.ts) : "Unavailable");
+      metaLine(detailsInner, "Payload", `${(message.text || "").length} text chars${message.imageUrl ? " · image attached" : ""}${message.replyTo ? " · reply" : ""}`);
 
       const actions = document.createElement("div");
       actions.className = "actions";
@@ -778,7 +807,8 @@
         setReply(message);
       });
       actions.append(reply);
-      details.append(actions);
+      detailsInner.append(actions);
+      details.append(detailsInner);
       bubble.append(details);
 
       bubble.addEventListener("click", event => {
