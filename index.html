@@ -333,17 +333,21 @@
   <script type="module">
     /**
      * =========================================================================
-     * CONFIGURATION: Connected to your Firebase project (webchat-c0e41).
+     * CONFIGURATION: Yappify Firebase project.
      * =========================================================================
      */
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+    import * as rtdb from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+
     const FIREBASE_CONFIG = {
-      apiKey: "AIzaSyBoEp0zehu-V5LMZYDzGgVUYkeciO15RyY",
-      authDomain: "webchat-c0e41.firebaseapp.com",
-      databaseURL: "https://webchat-c0e41-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "webchat-c0e41",
-      storageBucket: "webchat-c0e41.firebasestorage.app",
-      messagingSenderId: "218271898790",
-      appId: "1:218271898790:web:69afaf4cc811a66abee867",
+      apiKey: "AIzaSyAn06v2-5QKASkAObavHcbmofg39Wm8V-c",
+      authDomain: "yappify-b9b5e.firebaseapp.com",
+      databaseURL: "https://yappify-b9b5e-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "yappify-b9b5e",
+      storageBucket: "yappify-b9b5e.firebasestorage.app",
+      messagingSenderId: "397289116851",
+      appId: "1:397289116851:web:0800b4ae59d77220308cc6",
     };
 
     const IMGBB_API_KEY = "726fbbd12de1823c568d55f0be750282";
@@ -351,8 +355,8 @@
     const IS_CONFIGURED =
       FIREBASE_CONFIG.apiKey &&
       FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" &&
-      FIREBASE_CONFIG.databaseURL &&
-      !FIREBASE_CONFIG.databaseURL.includes("YOUR_PROJECT");
+      typeof FIREBASE_CONFIG.databaseURL === "string" &&
+      FIREBASE_CONFIG.databaseURL.startsWith("https://");
 
     const ROOM_ID = "public-lobby";
     const COOLDOWN_MS = 2500;
@@ -360,7 +364,7 @@
     const PRESENCE_HEARTBEAT_MS = 7000;
 
     // Anonymous per-tab sender id (never shown as a username)
-    const clientId = (() => {
+    let clientId = (() => {
       try {
         const existing = sessionStorage.getItem("yappify_cid");
         if (existing) return existing;
@@ -891,18 +895,21 @@
       }
 
       try {
-        const [{ initializeApp }, rtdb] = await Promise.all([
-          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js"),
-          import("https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js"),
-        ]);
+        setStatus("connecting");
 
         const app = initializeApp(FIREBASE_CONFIG);
+        const auth = getAuth(app);
+
+        // Give each visitor an anonymous Firebase identity before accessing RTDB.
+        // The UID becomes the sender/presence ID and can be checked by database rules.
+        const credential = await signInAnonymously(auth);
+        clientId = credential.user.uid;
+
         firebaseDatabaseApi = rtdb;
-        firebaseDb = rtdb.getDatabase(app);
+        firebaseDb = rtdb.getDatabase(app, FIREBASE_CONFIG.databaseURL);
         firebaseRef = rtdb.ref;
         firebasePush = rtdb.push;
 
-        setStatus("connecting");
         await subscribeToRoom(ROOM_ID);
         startViewerPresence();
       } catch (err) {
