@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>yappify</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+            sans: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+          },
+          colors: {
+            canvas: '#131518',
+            surface: '#191c20',
+            surfaceElevated: '#21252b',
+            borderSubtle: '#2c313a',
+            crimson: '#a8383b',
+            crimsonHover: '#8f2e31',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #2c313a;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3a414d;
+    }
+
+    @keyframes bubbleIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .msg-enter {
+      animation: bubbleIn 140ms ease-out both;
+    }
+
+    .message-details { display: none; }
+    .message-row.is-expanded .message-details { display: block; }
+    .message-basic-meta { display: flex; }
+    .message-row.is-expanded .message-basic-meta { display: none; }
+    .message-swipe-hint {
+      position: absolute;
+      left: -34px;
+      top: 50%;
+      transform: translateY(-50%);
+      opacity: 0;
+      color: rgba(251, 207, 232, 0.8);
+      transition: opacity 120ms ease;
+      pointer-events: none;
+    }
+    .message-row.swiping .message-swipe-hint { opacity: 1; }
+    .message-row { touch-action: pan-y; }
+    .message-bubble { will-change: transform; transition: transform 130ms ease; }
+    .message-row.swiping .message-bubble { transition: none; }
+    .message-details .meta-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 2px 0;
+    }
+    .message-details .meta-key { color: #77808d; }
+    .message-details .meta-value {
+      color: #aeb5bf;
+      text-align: right;
+      overflow-wrap: anywhere;
+      user-select: text;
+    }
+    .message-row { scroll-margin-block: 42vh; }
+    .message-jump-highlight .message-bubble {
+      position: relative;
+      z-index: 2;
+      animation: messagePulse 2.8s ease-out both;
+    }
+    .message-jump-highlight::before {
+      content: "ORIGINAL MESSAGE";
+      align-self: flex-start;
+      margin: 0 0 6px 7px;
+      padding: 3px 7px;
+      border: 1px solid rgba(226, 181, 178, 0.28);
+      border-radius: 6px;
+      background: rgba(45, 31, 34, 0.92);
+      color: #e2b5b2;
+      font: 600 8px/1.3 "JetBrains Mono", monospace;
+      letter-spacing: .09em;
+      animation: labelIn 180ms ease-out both;
+    }
+    @keyframes labelIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes messagePulse {
+      0%, 22% {
+        outline: 2px solid rgba(226, 181, 178, 0.95);
+        outline-offset: 3px;
+        background-color: rgba(214, 160, 160, 0.2);
+        box-shadow: 0 0 0 6px rgba(214, 160, 160, 0.10), 0 0 30px rgba(214, 160, 160, 0.22);
+        transform: scale(1.012);
+      }
+      100% {
+        outline-color: transparent;
+        outline-offset: 8px;
+        background-color: transparent;
+        box-shadow: 0 0 0 6px transparent, 0 0 30px transparent;
+        transform: scale(1);
+      }
+    }
+    .reply-quote {
+      display: block;
+      width: 100%;
+      text-align: left;
+      margin-bottom: 7px;
+      padding: 6px 9px;
+      border-left: 2px solid rgba(226, 181, 178, 0.48);
+      border-radius: 0 8px 8px 0;
+      background: rgba(0, 0, 0, 0.16);
+      transition: background 150ms ease, border-color 150ms ease;
+    }
+    .reply-quote:hover {
+      background: rgba(214, 160, 160, 0.10);
+      border-left-color: rgba(226, 181, 178, 0.95);
+      transform: translateX(2px);
+    }
+    .reply-quote:active {
+      background: rgba(214, 160, 160, 0.16);
+      transform: translateX(1px) scale(.995);
+    }
+    .reply-quote:focus-visible { outline: 1px solid rgba(226, 181, 178, 0.7); outline-offset: 2px; }
+
+    
+    :root {
+      color-scheme: dark;
+      --accent-soft: #d6a0a0;
+      --accent-bright: #e2b5b2;
+      --line-soft: rgba(170, 180, 194, 0.10);
+    }
+
+    body {
+      background-image: radial-gradient(ellipse at 50% -18%, rgba(168, 56, 59, 0.10), transparent 48%);
+    }
+
+    header {
+      min-height: 58px;
+      border-color: var(--line-soft) !important;
+      box-shadow: 0 8px 28px rgba(0, 0, 0, 0.10);
+    }
+
+    header h1 {
+      letter-spacing: -0.075em;
+      font-size: 17px;
+    }
+
+    header a[aria-label="Visit Rayyan’s homepage"] {
+      color: var(--accent-soft);
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 160ms ease, text-shadow 160ms ease;
+    }
+    header a[aria-label="Visit Rayyan’s homepage"]:hover {
+      color: #f0c7c3;
+      text-shadow: 0 0 16px rgba(214, 160, 160, 0.22);
+    }
+
+    #online-count {
+      min-width: 18px;
+      text-align: center;
+      color: #e2b5b2;
+    }
+    header > div:last-child {
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      gap: 9px;
+    }
+    header > div:last-child > span:first-child {
+      width: 6px;
+      height: 6px;
+      box-shadow: 0 0 9px rgba(244, 114, 182, 0.28);
+    }
+
+    .toast-container { width: min( calc(100vw - 24px), 320px); }
+    .app-toast {
+      display: block;
+      width: fit-content;
+      max-width: 100%;
+      padding: 8px 11px;
+      border: 1px solid rgba(170, 180, 194, 0.10);
+      border-radius: 9px;
+      background: rgba(25, 28, 32, 0.60);
+      color: rgba(225, 228, 234, 0.94);
+      font: 500 10px/1.45 "JetBrains Mono", ui-monospace, monospace;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      opacity: 0;
+      transform: translateY(-4px);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    .app-toast.is-visible { opacity: 1; transform: translateY(0); }
+    .app-toast.is-error { color: #e2bfc1; border-color: rgba(185, 107, 112, 0.18); }
+
+    #messages-container {
+      width: 100%;
+      max-width: 960px;
+      margin-inline: auto;
+      padding-inline: clamp(16px, 4vw, 36px);
+      scrollbar-gutter: stable;
+    }
+
+    .message-bubble {
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.09);
+      line-height: 1.55;
+    }
+    .message-row.is-expanded .message-bubble {
+      border-color: rgba(214, 160, 160, 0.20);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+    }
+    .message-details .meta-line + .meta-line { margin-top: 2px; }
+
+    footer {
+      border-color: var(--line-soft) !important;
+      background: rgba(25, 28, 32, 0.94) !important;
+      box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.12);
+      backdrop-filter: blur(14px);
+    }
+    #message-form { max-width: 760px; }
+    #message-input { caret-color: var(--accent-bright); }
+    #message-input::placeholder { letter-spacing: 0.01em; }
+    #attach-btn, #send-btn { transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease; }
+    #attach-btn:hover { background-color: rgba(255, 255, 255, 0.045); }
+    #send-btn { box-shadow: 0 3px 12px rgba(168, 56, 59, 0.18); }
+    #send-btn:hover { box-shadow: 0 4px 16px rgba(168, 56, 59, 0.28); }
+
+    button:focus-visible, a:focus-visible, textarea:focus-visible {
+      outline: 2px solid rgba(214, 160, 160, 0.72);
+      outline-offset: 3px;
+    }
+
+    @media (min-width: 900px) {
+      #messages-container { padding-top: 28px; padding-bottom: 28px; }
+      footer { padding-top: 16px; padding-bottom: 18px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body class="bg-canvas text-slate-200 font-mono h-dvh flex flex-col overflow-hidden antialiased selection:bg-rose-900/35 selection:text-rose-200">
+  
+  <header class="bg-surface/95 backdrop-blur border-b border-borderSubtle px-4 py-3 flex items-center justify-between gap-3 shrink-0">
+    <div class="inline-flex flex-col items-end min-w-0">
+      <h1 class="font-semibold text-base tracking-tight text-slate-200 truncate inline-flex items-baseline leading-none">
+        <span>yapp</span>
+        <span class="relative inline-block">
+          <span>ı</span>
+          <span
+            id="status-dot"
+            class="absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors"
+            title="Connecting"
+          ></span>
+        </span>
+        <span>ffy</span>
+      </h1>
+      <span class="text-[9px] leading-none text-slate-500 mt-1">by <a href="https://rayyanamer.github.io/" class="hover:text-slate-300 underline-offset-2 hover:underline transition-colors" aria-label="Visit Rayyan’s homepage">Rayyan</a></span>
+    </div>
+
+    <div class="flex items-center gap-2.5 text-xs text-slate-300 shrink-0" aria-label="People online" title="People viewing page">
+      <span class="w-2 h-2 rounded-full bg-rose-400/85"></span>
+      <span id="online-count" class="font-medium tabular-nums">1</span>
+    </div>
+  </header>
+
+  
+  <div id="toast-container" class="toast-container fixed top-16 right-3 sm:right-5 z-50 flex flex-col items-end gap-2 pointer-events-none" aria-live="polite" aria-atomic="true"></div>
+
+  
+  <div class="relative flex-1 min-h-0 flex flex-col">
+    <main id="messages-container" class="flex-1 overflow-y-auto px-4 py-5 space-y-3" aria-live="polite"></main>
+    <button
+      id="jump-latest-btn"
+      type="button"
+      class="hidden absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-surfaceElevated/95 border border-borderSubtle text-[11px] text-slate-200 hover:border-crimson/70 shadow-lg transition"
+    >
+      ↓ Latest
+    </button>
+  </div>
+
+  
+  <footer class="bg-surface border-t border-borderSubtle p-3 sm:p-4 shrink-0">
+    <form id="message-form" class="max-w-3xl mx-auto flex items-center gap-2">
+      <input id="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" class="hidden" />
+      <button id="attach-btn" type="button" aria-label="Attach image" title="Attach image (max 5 MB)" class="h-10 w-10 rounded-2xl border border-borderSubtle bg-surfaceElevated hover:border-crimson/70 text-slate-300 transition flex items-center justify-center shrink-0">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="3" width="18" height="18" rx="3" />
+          <circle cx="8.5" cy="8.5" r="1.5" />
+          <path d="m21 15-5-5L5 21" />
+        </svg>
+      </button>
+      <div class="min-w-0 flex-1 bg-surfaceElevated border border-borderSubtle focus-within:border-crimson/60 rounded-2xl px-3.5 py-2 transition flex flex-col">
+        <div id="reply-preview" class="hidden items-center gap-2 mb-2 pl-2 border-l-2 border-rose-300/40">
+          <div class="min-w-0 flex-1">
+            <div class="text-[10px] text-rose-200/75">Replying to</div>
+            <div id="reply-preview-text" class="text-[11px] text-slate-400 truncate"></div>
+          </div>
+          <button id="cancel-reply-btn" type="button" aria-label="Cancel reply" class="text-slate-500 hover:text-slate-200 text-lg leading-none px-1">×</button>
+        </div>
+        <div id="image-preview-wrap" class="hidden items-center gap-2 pb-2">
+          <img id="image-preview" alt="Selected image preview" class="h-12 w-12 rounded-lg object-cover border border-borderSubtle" />
+          <span id="image-name" class="min-w-0 flex-1 truncate text-[11px] text-slate-400"></span>
+          <button id="remove-image-btn" type="button" class="text-xs text-rose-300 hover:text-rose-200">Remove</button>
+        </div>
+        <textarea
+          id="message-input"
+          rows="1"
+          maxlength="500"
+          placeholder="Message..."
+          class="w-full bg-transparent text-sm text-neutral-100 placeholder-neutral-500 resize-none focus:outline-none max-h-32 leading-relaxed block"
+        ></textarea>
+      </div>
+      <button
+        id="send-btn"
+        type="submit"
+        aria-label="Send message"
+        class="h-10 w-10 rounded-2xl bg-crimson hover:bg-crimsonHover active:scale-[0.98] text-white transition flex items-center justify-center shrink-0"
+      >
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14" />
+          <path d="m12 5 7 7-7 7" />
+        </svg>
+      </button>
+    </form>
+  </footer>
+
+  <script type="module">
+    
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-auth.js";
+    import * as rtdb from "https://www.gstatic.com/firebasejs/13.4.0/firebase-database.js";
+
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyAn06v2-5QKASkAObavHcbmofg39Wm8V-c",
+      authDomain: "yappify-b9b5e.firebaseapp.com",
+      databaseURL: "https://yappify-b9b5e-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "yappify-b9b5e",
+      storageBucket: "yappify-b9b5e.firebasestorage.app",
+      messagingSenderId: "397289116851",
+      appId: "1:397289116851:web:0800b4ae59d77220308cc6",
+    };
+
+    const IMGBB_API_KEY = "726fbbd12de1823c568d55f0be750282";
+
+    const IS_CONFIGURED =
+      FIREBASE_CONFIG.apiKey &&
+      FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY" &&
+      typeof FIREBASE_CONFIG.databaseURL === "string" &&
+      FIREBASE_CONFIG.databaseURL.startsWith("https://");
+
+    const ROOM_ID = "public-lobby";
+    const COOLDOWN_MS = 2500;
+    const GHOST_PING_TEXT = "\u200b";
+    const GHOST_HEARTBEAT_MS = 10000;
+    const GHOST_TTL_MS = 30000;
+    const tabSessionId = (() => {
+      try {
+        const existing = sessionStorage.getItem("yappify_tab_sid");
+        if (existing) return existing;
+        const fresh = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        sessionStorage.setItem("yappify_tab_sid", fresh);
+        return fresh;
+      } catch {
+        return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      }
+    })();
+    let clientId = tabSessionId;
+
+    let lastSentAt = 0;
+    let profanityFilter = null;
+    let profanityFilterLoadFailed = false;
+
+    async function loadProfanityFilter() {
+      try {
+        const module = await import("https://esm.sh/leo-profanity@1.9.0");
+        profanityFilter = module.default || module;
+      } catch (error) {
+        profanityFilterLoadFailed = true;
+        console.warn("Profanity filter could not be loaded:", error);
+        showToast("Word filter unavailable. Please reload before sending text.", true);
+      }
+    }
+
+    const localRoomMessages = {
+      "public-lobby": [
+        {
+          id: "seed-1",
+          sender: "anon",
+          text: "Welcome to yappify.",
+          ts: Date.now() - 1000 * 60 * 3,
+        },
+      ],
+    };
+
+    const messagesContainer = document.getElementById("messages-container");
+    const jumpLatestBtn = document.getElementById("jump-latest-btn");
+    const messageForm = document.getElementById("message-form");
+    const messageInput = document.getElementById("message-input");
+    const imageInput = document.getElementById("image-input");
+    const attachBtn = document.getElementById("attach-btn");
+    const imagePreviewWrap = document.getElementById("image-preview-wrap");
+    const imagePreview = document.getElementById("image-preview");
+    const imageName = document.getElementById("image-name");
+    const removeImageBtn = document.getElementById("remove-image-btn");
+    const onlineCountEl = document.getElementById("online-count");
+    const statusDot = document.getElementById("status-dot");
+    const toastContainer = document.getElementById("toast-container");
+    const replyPreview = document.getElementById("reply-preview");
+    const replyPreviewText = document.getElementById("reply-preview-text");
+    const cancelReplyBtn = document.getElementById("cancel-reply-btn");
+    const renderedMessageIds = new Set();
+    let replyTarget = null;
+    let hasInitialRoomRender = false;
+
+    function clearReply() {
+      replyTarget = null;
+      replyPreview.classList.add("hidden");
+      replyPreview.classList.remove("flex");
+      replyPreviewText.textContent = "";
+    }
+
+    function setReplyTarget(msg) {
+      replyTarget = {
+        id: String(msg.id || ""),
+        sender: String(msg.sender || "anon"),
+        text: String(msg.text || "").slice(0, 180),
+        imageUrl: typeof msg.imageUrl === "string" ? msg.imageUrl : null
+      };
+      const excerpt = replyTarget.text || (replyTarget.imageUrl ? "Image" : "Message");
+      replyPreviewText.textContent = excerpt;
+      replyPreview.classList.remove("hidden");
+      replyPreview.classList.add("flex");
+      messageInput.focus();
+    }
+
+    cancelReplyBtn.addEventListener("click", clearReply);
+
+    function isNearBottom() {
+      const threshold = 96;
+      return messagesContainer.scrollHeight - messagesContainer.scrollTop - messagesContainer.clientHeight <= threshold;
+    }
+
+    function scrollToBottom(smooth = false) {
+      messagesContainer.scrollTo({
+        top: messagesContainer.scrollHeight,
+        behavior: smooth ? "smooth" : "auto",
+      });
+      jumpLatestBtn.classList.add("hidden");
+    }
+
+    messagesContainer.addEventListener("scroll", () => {
+      if (isNearBottom()) {
+        jumpLatestBtn.classList.add("hidden");
+      }
+    });
+
+    jumpLatestBtn.addEventListener("click", () => scrollToBottom(true));
+
+    function formatMessageTimestamp(ts) {
+      if (ts === null || ts === undefined || ts === "") return "";
+
+      const timestamp = Number(ts);
+      if (!Number.isFinite(timestamp)) return "";
+
+      const diffSec = Math.floor((Date.now() - timestamp) / 1000);
+      if (diffSec < 1) return "just now";
+
+      const formatUnit = (value, singular, plural) =>
+        `${value} ${value === 1 ? singular : plural} ago`;
+
+      if (diffSec < 60) return formatUnit(diffSec, "sec", "sec");
+
+      const diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return formatUnit(diffMin, "min", "min");
+
+      const diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return formatUnit(diffHr, "hr", "hrs");
+
+      const diffDay = Math.floor(diffHr / 24);
+      return formatUnit(diffDay, "day", "days");
+    }
+
+    function appendTextWithLinks(container, text, isMine) {
+      const urlRegex = /(https?:\/\/[^\s<]+)/g;
+      let lastIndex = 0;
+      for (const match of text.matchAll(urlRegex)) {
+        const start = match.index ?? 0;
+        if (start > lastIndex) {
+          container.appendChild(document.createTextNode(text.slice(lastIndex, start)));
+        }
+        const url = match[0];
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer nofollow";
+        link.textContent = url;
+        link.className = isMine
+          ? "underline underline-offset-2 decoration-rose-200/70 hover:text-white break-all"
+          : "underline underline-offset-2 decoration-rose-400/60 text-rose-300 hover:text-rose-200 break-all";
+        link.addEventListener("click", (e) => e.stopPropagation());
+        container.appendChild(link);
+        lastIndex = start + url.length;
+      }
+      if (lastIndex < text.length) {
+        container.appendChild(document.createTextNode(text.slice(lastIndex)));
+      }
+    }
+
+    function showToast(message, isError = false) {
+      const el = document.createElement("div");
+      el.className = `app-toast pointer-events-auto${isError ? " is-error" : ""}`;
+      el.textContent = message;
+      toastContainer.appendChild(el);
+      requestAnimationFrame(() => el.classList.add("is-visible"));
+      window.setTimeout(() => {
+        el.classList.remove("is-visible");
+        window.setTimeout(() => el.remove(), 200);
+      }, 2600);
+    }
+
+    async function copyTextToClipboard(value) {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        try {
+          await navigator.clipboard.writeText(value);
+          return true;
+        } catch (error) {
+          console.warn("Clipboard API unavailable; trying fallback:", error);
+        }
+      }
+
+      const helper = document.createElement("textarea");
+      helper.value = value;
+      helper.setAttribute("readonly", "");
+      helper.style.position = "fixed";
+      helper.style.top = "0";
+      helper.style.left = "-9999px";
+      helper.style.opacity = "0";
+      document.body.appendChild(helper);
+      helper.focus();
+      helper.select();
+      helper.setSelectionRange(0, helper.value.length);
+      let copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (error) {
+        console.warn("Clipboard fallback failed:", error);
+      }
+      helper.remove();
+      return copied;
+    }
+
+    function setStatus(state) {
+      if (state === "live") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-emerald-300/85 transition-colors";
+        statusDot.title = "Connected";
+      } else if (state === "error") {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-rose-400/90 transition-colors";
+        statusDot.title = "Server down";
+      } else {
+        statusDot.className = "absolute left-1/2 -translate-x-1/2 top-[1px] w-[2px] h-[2px] rounded-full bg-amber-300/80 transition-colors";
+        statusDot.title = "Connecting";
+      }
+    }
+
+    function jumpToMessage(messageId) {
+      if (!messageId) {
+        showToast("Original message is unavailable", true);
+        return;
+      }
+
+      const target = document.getElementById(`message-${CSS.escape(String(messageId))}`);
+      if (!target) {
+        showToast("Original message is no longer in the chat", true);
+        return;
+      }
+
+      document.querySelectorAll(".message-jump-highlight").forEach((item) => {
+        item.classList.remove("message-jump-highlight");
+      });
+
+      target.classList.remove("message-jump-highlight");
+      void target.offsetWidth;
+      target.classList.add("message-jump-highlight");
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+
+      const bubble = target.querySelector(".message-bubble");
+      if (bubble) bubble.setAttribute("aria-label", "Original message");
+
+      window.clearTimeout(target._jumpTimer);
+      target._jumpTimer = window.setTimeout(() => {
+        target.classList.remove("message-jump-highlight");
+        if (bubble) bubble.removeAttribute("aria-label");
+      }, 2800);
+    }
+
+    function addMetaLine(container, label, value) {
+      const line = document.createElement("div");
+      line.className = "meta-line";
+      const key = document.createElement("span");
+      key.className = "meta-key";
+      key.textContent = label;
+      const val = document.createElement("span");
+      val.className = "meta-value";
+      val.textContent = value || "—";
+      line.append(key, val);
+      container.appendChild(line);
+    }
+
+    function attachSwipeToReply(row, bubble, msg) {
+      let startX = 0;
+      let startY = 0;
+      let currentX = 0;
+      let tracking = false;
+      let didSwipe = false;
+      const maxDrag = 92;
+      const threshold = 64;
+
+      const start = (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (event.target.closest("button, a, img")) return;
+        tracking = true;
+        didSwipe = false;
+        startX = event.clientX;
+        startY = event.clientY;
+        currentX = 0;
+        bubble.style.transition = "none";
+      };
+
+      const move = (event) => {
+        if (!tracking) return;
+        const dx = event.clientX - startX;
+        const dy = event.clientY - startY;
+        if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) {
+          tracking = false;
+          bubble.style.transform = "";
+          return;
+        }
+        if (dx <= 0) return;
+        currentX = Math.min(dx, maxDrag);
+        if (currentX > 8) {
+          row.classList.add("swiping");
+          bubble.style.transform = `translateX(${currentX}px)`;
+          if (currentX >= threshold) didSwipe = true;
+        }
+      };
+
+      const finish = () => {
+        if (!tracking) return;
+        tracking = false;
+        bubble.style.transition = "";
+        bubble.style.transform = "";
+        row.classList.remove("swiping");
+        if (didSwipe) {
+          setReplyTarget(msg);
+          row.dataset.skipNextClick = "1";
+          window.setTimeout(() => delete row.dataset.skipNextClick, 250);
+        }
+      };
+
+      bubble.addEventListener("pointerdown", start);
+      bubble.addEventListener("pointermove", move);
+      bubble.addEventListener("pointerup", finish);
+      bubble.addEventListener("pointercancel", finish);
+      bubble.addEventListener("lostpointercapture", finish);
+    }
+
+    function renderMessages(messages) {
+      const isFirstRender = !hasInitialRoomRender;
+      const shouldStick = isFirstRender || isNearBottom();
+      messagesContainer.innerHTML = "";
+
+      if (!messages || messages.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "h-full flex items-center justify-center text-xs text-slate-500";
+        empty.textContent = "No messages yet.";
+        messagesContainer.appendChild(empty);
+        hasInitialRoomRender = true;
+        jumpLatestBtn.classList.add("hidden");
+        return;
+      }
+
+      messages.forEach((msg, idx) => {
+        const isMine = msg.sender === clientId;
+        const prev = messages[idx - 1];
+        const groupedWithPrev =
+          prev && prev.sender === msg.sender &&
+          typeof msg.ts === "number" && typeof prev.ts === "number" &&
+          msg.ts - prev.ts < 90000;
+
+        const row = document.createElement("div");
+        row.id = `message-${String(msg.id || "")}`;
+        row.className = `message-row relative flex flex-col max-w-xl ${isMine ? "ml-auto items-end" : "items-start"} ${groupedWithPrev ? "-mt-1.5" : ""} ${!renderedMessageIds.has(msg.id) ? "msg-enter" : ""}`;
+        if (msg.id) renderedMessageIds.add(msg.id);
+
+        const bubble = document.createElement("div");
+        bubble.className = `message-bubble group relative ${isMine
+          ? "bg-[#292629] hover:bg-[#302d30] border border-white/[0.045] text-slate-100 rounded-2xl rounded-br-sm"
+          : "bg-surfaceElevated/90 hover:bg-surfaceElevated border border-white/[0.035] text-slate-200 rounded-2xl rounded-bl-sm"} px-2.5 py-1.5 text-[12px] leading-[1.5] break-words shadow-none cursor-pointer transition-colors`;
+
+        const swipeHint = document.createElement("span");
+        swipeHint.className = "message-swipe-hint";
+        swipeHint.textContent = "↪";
+        row.appendChild(swipeHint);
+
+        if (msg.replyTo && typeof msg.replyTo === "object") {
+          const quote = document.createElement("button");
+          quote.type = "button";
+          quote.className = "reply-quote";
+          quote.title = "Jump to original message";
+          quote.setAttribute("aria-label", "Jump to the original message and highlight it");
+          if (msg.replyTo.sender === clientId) {
+            const quoteAuthor = document.createElement("span");
+            quoteAuthor.className = "block text-[9px] font-semibold tracking-wide text-rose-200/80 mb-0.5";
+            quoteAuthor.textContent = "You";
+            quote.appendChild(quoteAuthor);
+          }
+          const quoteText = document.createElement("span");
+          quoteText.className = "block text-[10px] text-slate-400 line-clamp-2 leading-snug";
+          quoteText.textContent = msg.replyTo.text || (msg.replyTo.imageUrl ? "Image" : "Message");
+          quote.appendChild(quoteText);
+          quote.addEventListener("click", (event) => {
+            event.stopPropagation();
+            jumpToMessage(msg.replyTo.id);
+          });
+          bubble.appendChild(quote);
+        }
+
+        if (typeof msg.text === "string" && msg.text.length) {
+          const textNode = document.createElement("div");
+          appendTextWithLinks(textNode, msg.text, isMine);
+          bubble.appendChild(textNode);
+        }
+
+        if (typeof msg.imageUrl === "string" && /^https:\/\//i.test(msg.imageUrl)) {
+          const image = document.createElement("img");
+          image.src = msg.imageUrl;
+          image.alt = "Shared image";
+          image.loading = "lazy";
+          image.referrerPolicy = "no-referrer";
+          image.className = "mt-1 max-w-[40%] max-h-28 rounded-lg object-contain cursor-zoom-in";
+          image.addEventListener("click", (event) => {
+            event.stopPropagation();
+            window.open(msg.imageUrl, "_blank", "noopener,noreferrer");
+          });
+          bubble.appendChild(image);
+        }
+
+        const basicMeta = document.createElement("div");
+        basicMeta.className = "message-basic-meta items-center gap-2 mt-1.5 text-[10px] text-slate-500/80";
+        const sender = document.createElement("span");
+        sender.textContent = "You";
+        const time = document.createElement("span");
+        time.className = "tabular-nums select-none";
+        time.dataset.ts = msg.ts ? String(msg.ts) : "";
+        time.textContent = msg.ts ? formatMessageTimestamp(msg.ts) : "";
+        if (isMine) basicMeta.appendChild(sender);
+        basicMeta.appendChild(time);
+        bubble.appendChild(basicMeta);
+
+        const details = document.createElement("div");
+        details.className = "message-details mt-2 pt-2 border-t border-white/[0.06] text-[10px] font-mono";
+        addMetaLine(details, "Message ID", msg.id ? String(msg.id) : "Local message");
+        addMetaLine(details, "Sender ID", msg.sender ? String(msg.sender) : "Unknown");
+        addMetaLine(details, "Local time", msg.ts ? new Date(msg.ts).toLocaleString() : "Unavailable");
+        addMetaLine(details, "UTC time", msg.ts ? new Date(msg.ts).toISOString() : "Unavailable");
+        addMetaLine(details, "Unix time", msg.ts ? String(msg.ts) : "Unavailable");
+        addMetaLine(details, "Payload", `${(msg.text || "").length} text chars${msg.imageUrl ? " · image attached" : ""}${msg.replyTo ? " · reply" : ""}`);
+
+        const actions = document.createElement("div");
+        actions.className = "flex items-center justify-end gap-3 mt-2 pt-1 border-t border-white/[0.06] text-[10px] text-slate-500";
+        const copyBtn = document.createElement("button");
+        copyBtn.type = "button";
+        copyBtn.className = "hover:text-slate-300 transition-colors";
+        copyBtn.textContent = "Copy";
+        copyBtn.addEventListener("click", async (event) => {
+          event.stopPropagation();
+          if (!msg.text) return;
+          const copied = await copyTextToClipboard(msg.text);
+          showToast(copied ? "Message copied" : "Could not copy here — select the message text", !copied);
+        });
+        const replyBtn = document.createElement("button");
+        replyBtn.type = "button";
+        replyBtn.className = "hover:text-rose-200/80 transition-colors";
+        replyBtn.textContent = "↩ Reply";
+        replyBtn.addEventListener("click", (event) => {
+          event.stopPropagation();
+          setReplyTarget(msg);
+        });
+        if (msg.text) actions.appendChild(copyBtn);
+        actions.appendChild(replyBtn);
+        details.appendChild(actions);
+        bubble.appendChild(details);
+
+        bubble.title = "Tap for technical message details · Swipe right to reply";
+        bubble.addEventListener("click", (event) => {
+          if (row.dataset.skipNextClick === "1") {
+            delete row.dataset.skipNextClick;
+            return;
+          }
+          if (event.target instanceof HTMLImageElement || event.target.closest("a, button")) return;
+          row.classList.toggle("is-expanded");
+        });
+
+        attachSwipeToReply(row, bubble, msg);
+        row.appendChild(bubble);
+        messagesContainer.appendChild(row);
+      });
+
+      hasInitialRoomRender = true;
+      if (shouldStick || (messages[messages.length - 1] && messages[messages.length - 1].sender === clientId)) {
+        scrollToBottom(false);
+        if (isFirstRender) {
+          requestAnimationFrame(() => requestAnimationFrame(() => scrollToBottom(false)));
+        }
+      } else {
+        jumpLatestBtn.classList.remove("hidden");
+      }
+    }
+
+    setInterval(() => {
+      document.querySelectorAll("[data-ts]").forEach((el) => {
+        const ts = Number(el.dataset.ts);
+        if (ts) el.textContent = formatMessageTimestamp(ts);
+      });
+    }, 1000);
+
+    let firebasePush = null;
+    let firebaseRef = null;
+    let firebaseDb = null;
+    let firebaseDatabaseApi = null;
+    let unsubscribeRoom = null;
+    let latestGhostEntries = [];
+    let ownGhostNodeKey = null;
+    let presenceConnectionRef = null;
+    let presenceConnectionHandler = null;
+
+    function refreshGhostViewerCount() {
+      const now = Date.now();
+      const activeSessions = new Set();
+
+      for (const ghost of latestGhostEntries) {
+        const ts = Number(ghost.ts);
+        if (!Number.isFinite(ts) || now - ts > GHOST_TTL_MS) continue;
+        const sessionKey = ghost.session || ghost.id || ghost.sender;
+        if (sessionKey) activeSessions.add(String(sessionKey));
+      }
+
+      onlineCountEl.textContent = String(activeSessions.size);
+    }
+
+    function startGhostHeartbeatPresence() {
+      if (!firebaseDb || !firebaseRef || !firebaseDatabaseApi) return;
+
+      ownGhostNodeKey = `ghost_${tabSessionId}`;
+      const ghostRef = firebaseRef(firebaseDb, `rooms/${ROOM_ID}/${ownGhostNodeKey}`);
+      presenceConnectionRef = firebaseRef(firebaseDb, ".info/connected");
+
+      const sendPresence = async () => {
+        if (document.visibilityState !== "visible") {
+          await firebaseDatabaseApi.remove(ghostRef).catch(() => {});
+          return;
+        }
+
+        try {
+          await firebaseDatabaseApi.set(ghostRef, {
+            sender: String(clientId).slice(0, 40),
+            session: tabSessionId,
+            text: GHOST_PING_TEXT,
+            ts: Date.now(),
+            ghost: true
+          });
+        } catch (error) {
+          console.warn("Presence update failed:", error);
+        }
+      };
+
+      presenceConnectionHandler = async (snapshot) => {
+        if (snapshot.val() !== true) {
+          onlineCountEl.textContent = "0";
+          return;
+        }
+
+        try {
+          await firebaseDatabaseApi.onDisconnect(ghostRef).remove();
+          await sendPresence();
+        } catch (error) {
+          console.warn("Presence setup failed:", error);
+        }
+      };
+
+      firebaseDatabaseApi.onValue(presenceConnectionRef, presenceConnectionHandler);
+      const presenceTimer = window.setInterval(sendPresence, GHOST_HEARTBEAT_MS);
+
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          sendPresence();
+        } else {
+          firebaseDatabaseApi.remove(ghostRef).catch(() => {});
+        }
+      });
+
+      window.addEventListener("online", sendPresence);
+      window.addEventListener("pagehide", () => {
+        window.clearInterval(presenceTimer);
+        firebaseDatabaseApi.remove(ghostRef).catch(() => {});
+      }, { once: true });
+    }
+
+    async function initBackend() {
+      if (!IS_CONFIGURED) {
+        setStatus("live");
+        onlineCountEl.textContent = "0";
+        renderMessages(localRoomMessages[ROOM_ID]);
+        return;
+      }
+
+      try {
+        setStatus("connecting");
+
+        const app = initializeApp(FIREBASE_CONFIG);
+        const auth = getAuth(app);
+        const credential = await signInAnonymously(auth);
+        clientId = credential.user.uid;
+
+        firebaseDatabaseApi = rtdb;
+        firebaseDb = rtdb.getDatabase(app, FIREBASE_CONFIG.databaseURL);
+        firebaseRef = rtdb.ref;
+        firebasePush = rtdb.push;
+
+        await subscribeToRoom(ROOM_ID);
+        startGhostHeartbeatPresence();
+      } catch (err) {
+        console.error("Firebase initialization failed:", err);
+        setStatus("error");
+        showToast(`Firebase error: ${err.code || err.message || "Initialization failed"}`, true);
+      }
+    }
+
+    async function subscribeToRoom(room) {
+      if (typeof unsubscribeRoom === "function") {
+        unsubscribeRoom();
+        unsubscribeRoom = null;
+      }
+
+      if (!firebaseDb || !firebaseDatabaseApi) {
+        if (!localRoomMessages[room]) localRoomMessages[room] = [];
+        renderMessages(localRoomMessages[room]);
+        return;
+      }
+
+      const rtdb = firebaseDatabaseApi;
+      const roomRef = rtdb.ref(firebaseDb, `rooms/${room}`);
+
+      const handler = (snapshot) => {
+        const val = snapshot.val() || {};
+        const allEntries = Object.entries(val)
+          .filter(([, data]) => data && typeof data === "object")
+          .map(([id, data]) => ({ id, ...data }))
+          .sort((a, b) => (a.ts || 0) - (b.ts || 0));
+        const ghostEntries = [];
+        const visibleMessages = [];
+
+        for (const item of allEntries) {
+          const cleanText = typeof item.text === "string"
+            ? item.text.replace(/\u200b/g, "").trim()
+            : "";
+
+          if (item.ghost === true || (typeof item.text === "string" && item.text.includes("\u200b") && cleanText.length === 0)) {
+            ghostEntries.push(item);
+          } else if (cleanText.length > 0 || (typeof item.imageUrl === "string" && item.imageUrl.length > 0)) {
+            visibleMessages.push(item);
+          }
+        }
+
+        latestGhostEntries = ghostEntries;
+        refreshGhostViewerCount();
+        renderMessages(visibleMessages);
+        setStatus("live");
+      };
+
+      const errorHandler = (error) => {
+        console.error("Firebase room subscription failed:", error);
+        setStatus("error");
+        showToast(`Firebase read error: ${error.code || error.message}`, true);
+      };
+
+      rtdb.onValue(roomRef, handler, errorHandler);
+      unsubscribeRoom = () => rtdb.off(roomRef, "value", handler);
+    }
+
+    let selectedImage = null;
+    let previewObjectUrl = null;
+    const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+    const ALLOWED_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+
+    function clearSelectedImage() {
+      selectedImage = null;
+      imageInput.value = "";
+      imagePreviewWrap.classList.add("hidden");
+      imagePreviewWrap.classList.remove("flex");
+      imagePreview.removeAttribute("src");
+      imageName.textContent = "";
+      if (previewObjectUrl) {
+        URL.revokeObjectURL(previewObjectUrl);
+        previewObjectUrl = null;
+      }
+    }
+
+    attachBtn.addEventListener("click", () => imageInput.click());
+    removeImageBtn.addEventListener("click", clearSelectedImage);
+
+    imageInput.addEventListener("change", () => {
+      const file = imageInput.files && imageInput.files[0];
+      if (!file) return;
+      if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+        showToast("Choose a JPG, PNG, WEBP, or GIF image.", true);
+        clearSelectedImage();
+        return;
+      }
+      if (file.size > MAX_IMAGE_SIZE) {
+        showToast("Image must be 5 MB or smaller.", true);
+        clearSelectedImage();
+        return;
+      }
+      selectedImage = file;
+      if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+      previewObjectUrl = URL.createObjectURL(file);
+      imagePreview.src = previewObjectUrl;
+      imageName.textContent = file.name;
+      imagePreviewWrap.classList.remove("hidden");
+      imagePreviewWrap.classList.add("flex");
+    });
+
+    messageInput.addEventListener("input", () => {
+      messageInput.style.height = "auto";
+      messageInput.style.height = `${Math.min(messageInput.scrollHeight, 128)}px`;
+    });
+
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        messageForm.requestSubmit();
+      }
+    });
+
+    messageForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const messageText = messageInput.value.trim();
+      const imageFile = selectedImage;
+      if (!messageText && !imageFile) return;
+
+      if (!firebaseDb || !firebasePush || !firebaseRef) {
+        showToast("Firebase is not connected. Check the connection indicator.", true);
+        return;
+      }
+
+      if (messageText && !profanityFilter) {
+        showToast(profanityFilterLoadFailed ? "Word filter unavailable. Reload and try again." : "Word filter is still loading. Try again shortly.", true);
+        return;
+      }
+      const filteredMessageText = messageText && profanityFilter
+        ? profanityFilter.clean(messageText, "*")
+        : "";
+      const wasFiltered = filteredMessageText !== messageText;
+
+      const now = Date.now();
+      if (now - lastSentAt < COOLDOWN_MS) {
+        const waitSec = ((COOLDOWN_MS - (now - lastSentAt)) / 1000).toFixed(1);
+        showToast(`Wait ${waitSec}s`, true);
+        return;
+      }
+
+      const sendButton = document.getElementById("send-btn");
+      sendButton.disabled = true;
+      attachBtn.disabled = true;
+
+      try {
+        let imageUrl = null;
+        if (imageFile) {
+          if (!ALLOWED_IMAGE_TYPES.has(imageFile.type) || imageFile.size > MAX_IMAGE_SIZE) {
+            throw new Error("Invalid image. Use JPG, PNG, WEBP, or GIF up to 5 MB.");
+          }
+          if (!IMGBB_API_KEY || IMGBB_API_KEY === "YOUR_IMGBB_API_KEY") {
+            throw new Error("ImgBB is not configured. Add your ImgBB API key in the configuration.");
+          }
+          const uploadData = new FormData();
+          uploadData.append("image", imageFile);
+          uploadData.append("name", imageFile.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80));
+          showToast("Uploading image to ImgBB...");
+          const uploadResponse = await fetch(
+            `https://api.imgbb.com/1/upload?key=${encodeURIComponent(IMGBB_API_KEY)}`,
+            { method: "POST", body: uploadData }
+          );
+          const uploadResult = await uploadResponse.json().catch(() => null);
+          if (!uploadResponse.ok || !uploadResult?.success || !uploadResult?.data?.url) {
+            const reason = uploadResult?.error?.message || `ImgBB upload failed (${uploadResponse.status})`;
+            throw new Error(reason);
+          }
+          imageUrl = uploadResult.data.url;
+        }
+
+        const payload = {
+          sender: String(clientId).slice(0, 40),
+          text: filteredMessageText.slice(0, 500),
+          ts: Date.now()
+        };
+        if (imageUrl) payload.imageUrl = imageUrl;
+        if (replyTarget) {
+          payload.replyTo = {
+            id: replyTarget.id,
+            sender: replyTarget.sender,
+            text: replyTarget.text,
+            imageUrl: replyTarget.imageUrl || null
+          };
+        }
+
+        await firebasePush(firebaseRef(firebaseDb, `rooms/${ROOM_ID}`), payload);
+        if (wasFiltered) showToast("Some words were replaced with *.");
+        lastSentAt = Date.now();
+        messageInput.value = "";
+        messageInput.style.height = "auto";
+        clearSelectedImage();
+        clearReply();
+      } catch (err) {
+        console.error("Firebase message/image upload failed:", err);
+        showToast(err.code ? `${err.code}: ${err.message}` : (err.message || "Message failed to send."), true);
+      } finally {
+        sendButton.disabled = false;
+        attachBtn.disabled = false;
+      }
+    });
+
+    loadProfanityFilter();
+    initBackend();
+  </script>
+</body>
+</html>
