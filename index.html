@@ -263,7 +263,7 @@
       <span class="text-[9px] leading-none text-slate-500 mt-1">by <a href="https://rayyanamer.github.io/" class="hover:text-slate-300 underline-offset-2 hover:underline transition-colors" aria-label="Visit Rayyan’s homepage">Rayyan</a></span>
     </div>
 
-    <div class="flex items-center gap-2.5 text-xs text-slate-300 shrink-0" aria-label="People online">
+    <div class="flex items-center gap-2.5 text-xs text-slate-300 shrink-0" aria-label="People online" title="People viewing page">
       <span class="w-2 h-2 rounded-full bg-rose-400/85"></span>
       <span id="online-count" class="font-medium tabular-nums">1</span>
     </div>
@@ -360,21 +360,33 @@
 
     const ROOM_ID = "public-lobby";
     const COOLDOWN_MS = 2500;
-    const PRESENCE_TTL_MS = 20000;
-    const PRESENCE_HEARTBEAT_MS = 7000;
 
-    // Anonymous per-tab sender id (never shown as a username)
-    let clientId = (() => {
+    // Ghost-message presence configuration:
+    // Each connected tab maintains a single ghost node inside `rooms/public-lobby`
+    // using a zero-width space payload (`\u200b`) so existing room security rules
+    // allow it and the message renderer filters it out from visible chat bubbles.
+    // Pings every 1 second; any device silent for > 3 seconds is disconnected
+    // and its stale ghost node is pruned so the tree never accumulates junk.
+    const GHOST_PING_TEXT = "\u200b";
+    const GHOST_HEARTBEAT_MS = 1000;
+    const GHOST_TTL_MS = 3000;
+
+    // Per-tab device/tab session token so multiple open tabs or devices
+    // from the same anonymous auth session are counted individually.
+    const tabSessionId = (() => {
       try {
-        const existing = sessionStorage.getItem("yappify_cid");
+        const existing = sessionStorage.getItem("yappify_tab_sid");
         if (existing) return existing;
         const fresh = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-        sessionStorage.setItem("yappify_cid", fresh);
+        sessionStorage.setItem("yappify_tab_sid", fresh);
         return fresh;
       } catch {
         return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       }
     })();
+
+    // Anonymous sender id (never shown as a username)
+    let clientId = tabSessionId;
 
     let lastSentAt = 0;
     let profanityFilter = null;
@@ -831,59 +843,118 @@
     let firebaseDb = null;
     let firebaseDatabaseApi = null;
     let unsubscribeRoom = null;
-    let unsubscribePresence = null;
-    let presenceInterval = null;
+    let ghostHeartbeatInterval = null;
+    let ghostReapInterval = null;
+    let latestGhostEntries = [];
+    let isGhostJoined = false;
+    let ownGhostNodeKey = null;
+    const prunedGhostKeys = new Set();
 
-    function startViewerPresence() {
+    /**
+     * Deletes stale ghost nodes from `rooms/${ROOM_ID}` that have not pinged
+     * within GHOST_TTL_MS so the Firebase message tree stays clean.
+     */
+    function pruneStaleGhostNodes(ghostEntries) {
       if (!firebaseDb || !firebaseRef || !firebaseDatabaseApi) return;
+      const now = Date.now();
 
-      if (presenceInterval) clearInterval(presenceInterval);
-      if (typeof unsubscribePresence === "function") {
-        unsubscribePresence();
-        unsubscribePresence = null;
+      for (const ghost of ghostEntries) {
+        if (!ghost.id || ghost.id === ownGhostNodeKey) continue;
+        const ts = Number(ghost.ts);
+        if (!Number.isFinite(ts) || now - ts > GHOST_TTL_MS) {
+          if (!prunedGhostKeys.has(ghost.id)) {
+            prunedGhostKeys.add(ghost.id);
+            const staleRef = firebaseRef(firebaseDb, `rooms/${ROOM_ID}/${ghost.id}`);
+            firebaseDatabaseApi.remove(staleRef)
+              .catch(() => {})
+              .finally(() => {
+                window.setTimeout(() => prunedGhostKeys.delete(ghost.id), 5000);
+              });
+          }
+        }
+      }
+    }
+
+    /**
+     * Evaluates all ghost heartbeat messages in the room and updates the
+     * online viewer count based on fresh pings within GHOST_TTL_MS (3 seconds).
+     */
+    function refreshGhostViewerCount() {
+      const now = Date.now();
+      const activeSessions = new Set();
+
+      // Always include this local active window if connected.
+      if (isGhostJoined) {
+        activeSessions.add(ownGhostNodeKey || tabSessionId);
       }
 
-      const presenceRef = firebaseRef(firebaseDb, `presence/${ROOM_ID}/${clientId}`);
-      const allPresenceRef = firebaseRef(firebaseDb, `presence/${ROOM_ID}`);
+      for (const ghost of latestGhostEntries) {
+        const ts = Number(ghost.ts);
+        if (!Number.isFinite(ts) || now - ts > GHOST_TTL_MS) continue;
+        // Identify each connected device/tab by its unique ghost key or session token.
+        const sessionKey = ghost.session || ghost.id || ghost.sender;
+        if (sessionKey) activeSessions.add(String(sessionKey));
+      }
 
-      const updatePresence = () => {
-        firebaseDatabaseApi.set(presenceRef, {
-          lastSeen: Date.now()
-        }).catch((err) => {
-          console.warn("Presence update failed:", err);
-        });
-      };
+      onlineCountEl.textContent = String(Math.max(1, activeSessions.size));
+    }
 
-      firebaseDatabaseApi.onDisconnect(presenceRef).remove()
-        .then(updatePresence)
-        .catch((err) => {
-          console.warn("Presence disconnect handler failed:", err);
-          updatePresence();
-        });
+    /**
+     * Starts ghost-message heartbeat pinging inside `rooms/${ROOM_ID}`.
+     * Updates a dedicated ghost message record (`text: "\u200b"`) every 1 second,
+     * registers an `onDisconnect().remove()` hook, and prunes stale nodes > 3s old.
+     */
+    function startGhostHeartbeatPresence() {
+      if (!firebaseDb || !firebaseRef || !firebaseDatabaseApi) return;
 
-      presenceInterval = setInterval(updatePresence, PRESENCE_HEARTBEAT_MS);
+      if (ghostHeartbeatInterval) clearInterval(ghostHeartbeatInterval);
+      if (ghostReapInterval) clearInterval(ghostReapInterval);
 
-      const presenceHandler = (snapshot) => {
+      // Unique node key per open device/tab inside `rooms/public-lobby`
+      ownGhostNodeKey = `ghost_${tabSessionId}`;
+      const ghostRef = firebaseRef(firebaseDb, `rooms/${ROOM_ID}/${ownGhostNodeKey}`);
+
+      const sendGhostPing = () => {
         const now = Date.now();
-        const entries = snapshot.val() || {};
-        const activeCount = Object.values(entries).filter((entry) => {
-          return entry &&
-            typeof entry.lastSeen === "number" &&
-            now - entry.lastSeen <= PRESENCE_TTL_MS;
-        }).length;
-
-        onlineCountEl.textContent = String(Math.max(1, activeCount));
+        firebaseDatabaseApi.set(ghostRef, {
+          sender: String(clientId).slice(0, 40),
+          session: tabSessionId,
+          text: GHOST_PING_TEXT,
+          ts: now,
+          ghost: true
+        }).then(() => {
+          isGhostJoined = true;
+          refreshGhostViewerCount();
+        }).catch((err) => {
+          console.warn("Ghost heartbeat ping failed:", err);
+        });
       };
 
-      const presenceErrorHandler = (error) => {
-        console.warn("Presence subscription failed:", error);
-        onlineCountEl.textContent = "1";
-      };
+      // Immediately send the initial ping and register onDisconnect cleanup.
+      sendGhostPing();
+      firebaseDatabaseApi.onDisconnect(ghostRef).remove().catch((err) => {
+        console.warn("Ghost onDisconnect registration failed:", err);
+      });
 
-      firebaseDatabaseApi.onValue(allPresenceRef, presenceHandler, presenceErrorHandler);
-      unsubscribePresence = () => {
-        firebaseDatabaseApi.off(allPresenceRef, "value", presenceHandler);
-      };
+      // Keep ghost heartbeat alive every 1 second while tab is open.
+      ghostHeartbeatInterval = setInterval(sendGhostPing, GHOST_HEARTBEAT_MS);
+
+      // Re-evaluate 3-second TTL expirations and prune stale ghost nodes every second.
+      ghostReapInterval = setInterval(() => {
+        refreshGhostViewerCount();
+        pruneStaleGhostNodes(latestGhostEntries);
+      }, 1000);
+
+      // Immediately ping when user switches back to this tab or regains network.
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") {
+          sendGhostPing();
+        }
+      });
+      window.addEventListener("online", sendGhostPing);
+      window.addEventListener("pagehide", () => {
+        firebaseDatabaseApi.remove(ghostRef).catch(() => {});
+      });
     }
 
     async function initBackend() {
@@ -901,7 +972,6 @@
         const auth = getAuth(app);
 
         // Give each visitor an anonymous Firebase identity before accessing RTDB.
-        // The UID becomes the sender/presence ID and can be checked by database rules.
         const credential = await signInAnonymously(auth);
         clientId = credential.user.uid;
 
@@ -911,7 +981,7 @@
         firebasePush = rtdb.push;
 
         await subscribeToRoom(ROOM_ID);
-        startViewerPresence();
+        startGhostHeartbeatPresence();
       } catch (err) {
         console.error("Firebase initialization failed:", err);
         setStatus("error");
@@ -941,10 +1011,25 @@
           .map(([id, data]) => ({ id, ...data }))
           .sort((a, b) => (a.ts || 0) - (b.ts || 0));
 
-        const visibleMessages = allEntries.filter(
-          (item) => typeof item.text === "string" && item.text.replace(/\u200b/g, "").trim().length > 0
-        );
+        // Separate ghost heartbeat pings from visible user messages
+        const ghostEntries = [];
+        const visibleMessages = [];
 
+        for (const item of allEntries) {
+          const cleanText = typeof item.text === "string"
+            ? item.text.replace(/\u200b/g, "").trim()
+            : "";
+
+          if (item.ghost === true || (typeof item.text === "string" && item.text.includes("\u200b") && cleanText.length === 0)) {
+            ghostEntries.push(item);
+          } else if (cleanText.length > 0 || (typeof item.imageUrl === "string" && item.imageUrl.length > 0)) {
+            visibleMessages.push(item);
+          }
+        }
+
+        latestGhostEntries = ghostEntries;
+        pruneStaleGhostNodes(ghostEntries);
+        refreshGhostViewerCount();
         renderMessages(visibleMessages);
         setStatus("live");
       };
