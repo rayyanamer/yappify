@@ -145,7 +145,8 @@
     .author-link{color:var(--soft);text-decoration:none;font-weight:600;transition:color .16s,text-shadow .16s}
     .author-link:hover{color:var(--author-hover);text-shadow:0 0 16px var(--author-glow)}
     .brand-mark{position:relative;display:inline-block}
-    .status-dot{position:absolute;width:3px;height:3px;left:50%;top:1px;transform:translateX(-50%);border-radius:50%;background:#fcd34d;transition:background .2s}
+    /* Moved dot of 'i' slightly higher up */
+    .status-dot{position:absolute;width:3px;height:3px;left:50%;top:-1px;transform:translateX(-50%);border-radius:50%;background:#fcd34d;transition:background .2s}
 
     /* Seamless Connected Online Trigger & Dock */
     .online-wrap{position:relative;display:flex;align-items:center}
@@ -163,11 +164,11 @@
     .dock-online-label{font-size:11px;font-weight:500;color:#cbd5e1;display:flex;align-items:center;gap:6px}
     .dock-live-dot{width:6px;height:6px;border-radius:50%;background:var(--icon-tint);box-shadow:0 0 8px var(--icon-tint);transition:background .25s,box-shadow .25s}
 
-    /* Circular Theme Swatches */
-    .theme-swatches{display:flex;align-items:center;gap:6px}
-    .theme-swatch{width:16px;height:16px;padding:0;border-radius:50%;border:1.5px solid rgba(255,255,255,.16);background:var(--swatch-bg);box-shadow:0 2px 6px rgba(0,0,0,.3);transition:transform .2s cubic-bezier(.34,1.56,.64,1),border-color .2s,box-shadow .2s;flex:none}
-    .theme-swatch:hover{transform:scale(1.18);border-color:rgba(255,255,255,.55)}
-    .theme-swatch.active{transform:scale(1.14);border-color:#fff;box-shadow:0 0 0 2px var(--surface),0 0 0 3.5px var(--swatch-ring)}
+    /* Smoother, simpler theme swatches */
+    .theme-swatches{display:flex;align-items:center;gap:5px}
+    .theme-swatch{width:15px;height:15px;padding:0;border-radius:50%;border:1px solid rgba(255,255,255,.2);background:var(--swatch-bg);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease;flex:none}
+    .theme-swatch:hover{transform:scale(1.15);border-color:rgba(255,255,255,.6)}
+    .theme-swatch.active{transform:scale(1.12);border-color:#fff;box-shadow:0 0 0 2px var(--surface),0 0 0 3px var(--swatch-ring)}
 
     /* DB Stats Grid inside Dock */
     .dock-stats{margin-top:10px;display:flex;flex-direction:column;gap:6px;font-size:10px;opacity:0;transform:translateY(-4px);transition:opacity .22s ease,transform .26s cubic-bezier(.22,1,.36,1)}
