@@ -196,8 +196,8 @@ function safeTextWithLinks(parent, value, mine) {
     link.rel = "noopener noreferrer nofollow";
     link.textContent = match[0];
     link.style.cssText = mine
-      ? "color:inherit;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere"
-      : "color:var(--soft);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere";
+      ? "color:inherit;text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;word-break:break-word"
+      : "color:var(--soft);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;word-break:break-word";
     link.addEventListener("click", event => event.stopPropagation());
     parent.append(link);
     cursor = start + match[0].length;
@@ -234,6 +234,54 @@ function metaLine(parent, label, value) {
   val.textContent = value || "—";
   line.append(key, val);
   parent.append(line);
+}
+
+function getUserHexColor(senderId) {
+  const id = String(senderId || "anonymous");
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const hue = ((hash >>> 0) % 360);
+  const sat = 68 + ((hash >>> 9) % 18);
+  const light = 64 + ((hash >>> 17) % 14);
+
+  const s = sat / 100;
+  const l = light / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hue < 60) { r1 = c; g1 = x; b1 = 0; }
+  else if (hue < 120) { r1 = x; g1 = c; b1 = 0; }
+  else if (hue < 180) { r1 = 0; g1 = c; b1 = x; }
+  else if (hue < 240) { r1 = 0; g1 = x; b1 = c; }
+  else if (hue < 300) { r1 = x; g1 = 0; b1 = c; }
+  else { r1 = c; g1 = 0; b1 = x; }
+
+  const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r1)}${toHex(g1)}${toHex(b1)}`;
+}
+
+function formatShortUserLabel(senderId) {
+  const clean = String(senderId || "anon").replace(/[^a-zA-Z0-9]/g, "");
+  if (clean.length <= 8) return clean || "anon";
+  return `${clean.slice(0, 4)}…${clean.slice(-3)}`;
+}
+
+function getUserBubbleSurface(senderId, mine) {
+  const id = String(senderId || "anonymous");
+  let hash = 2166136261;
+  for (let i = 0; i < id.length; i++) {
+    hash ^= id.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const hue = (hash >>> 0) % 360;
+  const sat = mine ? 16 : 18;
+  const light = mine ? 16 : 15;
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
 }
 
 function jumpToMessage(id) {
@@ -320,6 +368,7 @@ function attachSwipe(row, bubble, message) {
 
 function renderMessage(message, previous) {
   const mine = message.sender === uid;
+  const senderColor = getUserHexColor(message.sender);
   const sameDayAsPrevious = previous && Number(message.ts) && Number(previous.ts) &&
     getDateKey(message.ts) === getDateKey(previous.ts);
   const grouped = sameDayAsPrevious && previous.sender === message.sender &&
@@ -335,6 +384,9 @@ function renderMessage(message, previous) {
 
   const bubble = document.createElement("div");
   bubble.className = "message-bubble";
+  if (!mine) {
+    bubble.style.backgroundColor = getUserBubbleSurface(message.sender, false);
+  }
   bubble.title = "Tap for details · Swipe right to reply";
 
   if (message.replyTo && typeof message.replyTo === "object") {
@@ -361,6 +413,8 @@ function renderMessage(message, previous) {
 
   if (message.text) {
     const text = document.createElement("div");
+    text.style.overflowWrap = "anywhere";
+    text.style.wordBreak = "break-word";
     safeTextWithLinks(text, message.text, mine);
     bubble.append(text);
   }
@@ -399,7 +453,9 @@ function renderMessage(message, previous) {
   detailsInner.className = "message-details-inner";
 
   metaLine(detailsInner, "Message ID", message.id);
+  metaLine(detailsInner, "Sender", mine ? `You (${formatShortUserLabel(message.sender)})` : formatShortUserLabel(message.sender));
   metaLine(detailsInner, "Sender ID", message.sender);
+  metaLine(detailsInner, "User Hex", senderColor);
   metaLine(detailsInner, "Local time", message.ts ? new Date(message.ts).toLocaleString() : "Unavailable");
   metaLine(detailsInner, "UTC time", message.ts ? new Date(message.ts).toISOString() : "Unavailable");
   metaLine(detailsInner, "Unix time", message.ts ? String(message.ts) : "Unavailable");
