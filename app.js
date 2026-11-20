@@ -32,7 +32,8 @@ const ui = {
   imagePreview: $("image-preview"), imageName: $("image-name"), removeImage: $("remove-image"),
   onlineToggle: $("online-toggle"), statusDock: $("status-dock"),
   dockOnlineCount: $("dock-online-count"), statMsgs: $("stat-msgs"), statSize: $("stat-size"),
-  statOffset: $("stat-offset"), statUid: $("stat-uid")
+  statOffset: $("stat-offset"), statUid: $("stat-uid"), statUsername: $("stat-username"),
+  statUserDot: $("stat-user-dot"), statHex: $("stat-hex")
 };
 
 let db, uid = "", sessionId = createSessionId(), serverOffset = 0;
@@ -48,6 +49,62 @@ const THEMES = {
   cobalt: "Cobalt Blue",
   amber: "Amber Gold"
 };
+
+const HANDLE_ADJECTIVES = [
+  "silent", "lunar", "solar", "cryptic", "velvet", "static", "neon", "hollow",
+  "phantom", "cobalt", "crimson", "amber", "drift", "echo", "pixel", "cyber",
+  "frost", "shadow", "vivid", "muted", "lucid", "astral", "rogue", "zenith",
+  "binary", "prism", "ghost", "nova", "stray", "onyx", "mist", "hyper"
+];
+
+const HANDLE_NOUNS = [
+  "fox", "owl", "wolf", "lynx", "crow", "moth", "hawk", "viper",
+  "node", "byte", "pulse", "spark", "orbit", "wave", "shard", "core",
+  "drifter", "nomad", "cipher", "specter", "wisp", "seeker", "signal", "glitch",
+  "kestrel", "falcon", "mantis", "badger", "heron", "jackal", "raven", "zephyr"
+];
+
+function hashStringFNV1a(value) {
+  const str = String(value || "anonymous");
+  let hash = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function getUserHexColor(senderId) {
+  const hash = hashStringFNV1a(senderId);
+  const hue = hash % 360;
+  const sat = 68 + ((hash >>> 9) % 18);
+  const light = 64 + ((hash >>> 17) % 14);
+
+  const s = sat / 100;
+  const l = light / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (hue < 60) { r1 = c; g1 = x; b1 = 0; }
+  else if (hue < 120) { r1 = x; g1 = c; b1 = 0; }
+  else if (hue < 180) { r1 = 0; g1 = c; b1 = x; }
+  else if (hue < 240) { r1 = 0; g1 = x; b1 = c; }
+  else if (hue < 300) { r1 = x; g1 = 0; b1 = c; }
+  else { r1 = c; g1 = 0; b1 = x; }
+
+  const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
+  return `#${toHex(r1)}${toHex(g1)}${toHex(b1)}`;
+}
+
+function getUserHandle(senderId) {
+  const hash = hashStringFNV1a(senderId);
+  const hex = getUserHexColor(senderId).slice(1).toLowerCase();
+  const adj = HANDLE_ADJECTIVES[hash % HANDLE_ADJECTIVES.length];
+  const noun = HANDLE_NOUNS[(hash >>> 8) % HANDLE_NOUNS.length];
+  return `${adj}-${noun}#${hex.slice(0, 4)}`;
+}
 
 function readCachedTheme() {
   try {
@@ -124,8 +181,29 @@ function updateDbStats() {
     : `${totalBytes} B`;
 
   ui.statOffset.textContent = `${serverOffset >= 0 ? "+" : ""}${Math.round(serverOffset)} ms`;
-  ui.statUid.textContent = uid ? `${uid.slice(0, 6)}…${uid.slice(-4)}` : "connecting...";
-  ui.statUid.title = uid || "Connecting";
+
+  if (uid) {
+    const hex = getUserHexColor(uid);
+    const handle = getUserHandle(uid);
+    ui.statUsername.textContent = handle;
+    ui.statUsername.title = `${handle} (${uid})`;
+    ui.statUsername.style.color = hex;
+    ui.statUserDot.style.background = hex;
+    ui.statUserDot.style.boxShadow = `0 0 6px ${hex}`;
+    ui.statHex.textContent = hex;
+    ui.statHex.style.color = hex;
+    ui.statUid.textContent = `${uid.slice(0, 6)}…${uid.slice(-4)}`;
+    ui.statUid.title = uid;
+  } else {
+    ui.statUsername.textContent = "connecting...";
+    ui.statUsername.style.color = "";
+    ui.statUserDot.style.background = "";
+    ui.statUserDot.style.boxShadow = "";
+    ui.statHex.textContent = "—";
+    ui.statHex.style.color = "";
+    ui.statUid.textContent = "connecting...";
+    ui.statUid.title = "Connecting";
+  }
 }
 
 function createSessionId() {
@@ -223,7 +301,7 @@ function fallbackCopy(value) {
   toast(ok ? "Message copied" : "Could not copy message", !ok);
 }
 
-function metaLine(parent, label, value) {
+function metaLine(parent, label, value, color = "") {
   const line = document.createElement("div");
   line.className = "meta-line";
   const key = document.createElement("span");
@@ -232,37 +310,9 @@ function metaLine(parent, label, value) {
   const val = document.createElement("span");
   val.className = "meta-value";
   val.textContent = value || "—";
+  if (color) val.style.color = color;
   line.append(key, val);
   parent.append(line);
-}
-
-function getUserHexColor(senderId) {
-  const id = String(senderId || "anonymous");
-  let hash = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  const hue = ((hash >>> 0) % 360);
-  const sat = 68 + ((hash >>> 9) % 18);
-  const light = 64 + ((hash >>> 17) % 14);
-
-  const s = sat / 100;
-  const l = light / 100;
-  const c = (1 - Math.abs(2 * l - 1)) * s;
-  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
-  const m = l - c / 2;
-
-  let r1 = 0, g1 = 0, b1 = 0;
-  if (hue < 60) { r1 = c; g1 = x; b1 = 0; }
-  else if (hue < 120) { r1 = x; g1 = c; b1 = 0; }
-  else if (hue < 180) { r1 = 0; g1 = c; b1 = x; }
-  else if (hue < 240) { r1 = 0; g1 = x; b1 = c; }
-  else if (hue < 300) { r1 = x; g1 = 0; b1 = c; }
-  else { r1 = c; g1 = 0; b1 = x; }
-
-  const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, "0");
-  return `#${toHex(r1)}${toHex(g1)}${toHex(b1)}`;
 }
 
 function formatShortUserLabel(senderId) {
@@ -272,13 +322,8 @@ function formatShortUserLabel(senderId) {
 }
 
 function getUserBubbleSurface(senderId, mine) {
-  const id = String(senderId || "anonymous");
-  let hash = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    hash ^= id.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  const hue = (hash >>> 0) % 360;
+  const hash = hashStringFNV1a(senderId);
+  const hue = hash % 360;
   const sat = mine ? 16 : 18;
   const light = mine ? 16 : 15;
   return `hsl(${hue}, ${sat}%, ${light}%)`;
@@ -369,6 +414,7 @@ function attachSwipe(row, bubble, message) {
 function renderMessage(message, previous) {
   const mine = message.sender === uid;
   const senderColor = getUserHexColor(message.sender);
+  const senderHandle = getUserHandle(message.sender);
   const sameDayAsPrevious = previous && Number(message.ts) && Number(previous.ts) &&
     getDateKey(message.ts) === getDateKey(previous.ts);
   const grouped = sameDayAsPrevious && previous.sender === message.sender &&
@@ -453,9 +499,9 @@ function renderMessage(message, previous) {
   detailsInner.className = "message-details-inner";
 
   metaLine(detailsInner, "Message ID", message.id);
-  metaLine(detailsInner, "Sender", mine ? `You (${formatShortUserLabel(message.sender)})` : formatShortUserLabel(message.sender));
+  metaLine(detailsInner, "Username", mine ? `${senderHandle} (You)` : senderHandle, senderColor);
   metaLine(detailsInner, "Sender ID", message.sender);
-  metaLine(detailsInner, "User Hex", senderColor);
+  metaLine(detailsInner, "User Hex", senderColor, senderColor);
   metaLine(detailsInner, "Local time", message.ts ? new Date(message.ts).toLocaleString() : "Unavailable");
   metaLine(detailsInner, "UTC time", message.ts ? new Date(message.ts).toISOString() : "Unavailable");
   metaLine(detailsInner, "Unix time", message.ts ? String(message.ts) : "Unavailable");
