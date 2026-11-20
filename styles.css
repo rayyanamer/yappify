@@ -357,6 +357,7 @@ body {
 }
 
 
+/* Final mobile layout fix: correct sizing, right inset and touch scrolling */
 html,
 body {
   width: 100%;
