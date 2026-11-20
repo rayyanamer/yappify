@@ -416,6 +416,22 @@ header {
   max-width: 145px;
 }
 
+.stat-user-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.user-hex-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--muted);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
 .toast-container {
   position: fixed;
   z-index: 20;
